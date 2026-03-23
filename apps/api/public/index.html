@@ -50,7 +50,12 @@
           </label>
           <label>
             OpenAI Model
-            <input id="openAiModel" value="gpt-5-mini" />
+            <div class="inline-row">
+              <select id="openAiModel">
+                <option value="gpt-5-mini" selected>gpt-5-mini</option>
+              </select>
+              <button type="button" id="refreshModelsBtn" class="secondary small">Refresh Models</button>
+            </div>
           </label>
         </div>
 

@@ -199,6 +199,16 @@ select:focus {
   margin-top: 2px;
 }
 
+.inline-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.inline-row select {
+  flex: 1;
+}
+
 .actions {
   display: flex;
   gap: 10px;

@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { existsSync } from "node:fs";
 
-import { applyManualReview, organizeAudiobooks, scanAudiobookFiles, searchMetadata } from "@aon/core";
+import { applyManualReview, listOpenAiModels, organizeAudiobooks, scanAudiobookFiles, searchMetadata } from "@aon/core";
 
 const app = express();
 const currentFile = fileURLToPath(import.meta.url);
@@ -84,6 +84,10 @@ const metadataSearchSchema = z.object({
   providers: z.array(z.enum(["librivox", "openlibrary", "googlebooks"])).optional(),
 });
 
+const modelListSchema = z.object({
+  openAiApiKey: z.string().optional(),
+});
+
 app.get("/health", (_req: Request, res: Response) => {
   res.json({ ok: true, service: "audiobook-organizer-api" });
 });
@@ -92,8 +96,36 @@ app.get("/api", (_req: Request, res: Response) => {
   res.json({
     ok: true,
     service: "audiobook-organizer-api",
-    endpoints: ["/api", "/health", "/scan", "/organize", "/manual-review/apply", "/metadata/search"],
+    endpoints: [
+      "/api",
+      "/health",
+      "/scan",
+      "/organize",
+      "/organize/stream",
+      "/manual-review/apply",
+      "/metadata/search",
+      "/openai/models",
+    ],
   });
+});
+
+app.post("/openai/models", async (req: Request, res: Response) => {
+  try {
+    const parsed = modelListSchema.parse(req.body ?? {});
+    const apiKey = parsed.openAiApiKey || process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return res.status(400).json({ error: "OPENAI API key missing. Pass openAiApiKey or set OPENAI_API_KEY." });
+    }
+
+    const models = await listOpenAiModels(apiKey);
+    return res.json({ count: models.length, models });
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.issues });
+    }
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return res.status(500).json({ error: message });
+  }
 });
 
 app.post("/scan", async (req: Request, res: Response) => {
@@ -148,6 +180,63 @@ app.post("/organize", async (req: Request, res: Response) => {
     }
     const message = error instanceof Error ? error.message : "Unknown error";
     return res.status(500).json({ error: message });
+  }
+});
+
+app.post("/organize/stream", async (req: Request, res: Response) => {
+  res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+
+  const send = (event: unknown) => {
+    res.write(`${JSON.stringify(event)}\n`);
+  };
+
+  try {
+    const parsed = organizeSchema.parse(req.body);
+    const openAiApiKey = parsed.openAiApiKey || process.env.OPENAI_API_KEY;
+    if (!openAiApiKey) {
+      send({ type: "error", message: "OPENAI API key missing. Pass openAiApiKey or set OPENAI_API_KEY." });
+      return res.end();
+    }
+
+    const result = await (organizeAudiobooks as unknown as (
+      config: unknown,
+      openAiApiKey: string,
+      onProgress: (event: unknown) => void,
+    ) => Promise<unknown>)(
+      {
+        inputDir: parsed.inputDir,
+        outputDir: parsed.outputDir,
+        recursive: parsed.recursive,
+        dryRun: parsed.dryRun,
+        overwrite: parsed.overwrite,
+        metadataProviderOrder: parsed.metadataProviderOrder,
+        providerApiKeys: parsed.providerApiKeys,
+        openAiModel: parsed.openAiModel,
+        folderTemplate: parsed.folderTemplate,
+        namingTemplate: parsed.namingTemplate,
+        createBookFolder: parsed.createBookFolder,
+        conflictPolicy: parsed.conflictPolicy,
+        highReliabilityThreshold: parsed.highReliabilityThreshold,
+        manualReviewDir: parsed.manualReviewDir,
+        embedCoverInAudio: parsed.embedCoverInAudio,
+        embedMetadataInAudio: parsed.embedMetadataInAudio,
+      },
+      openAiApiKey,
+      (event: unknown) => send(event),
+    );
+
+    send({ type: "result", result });
+    return res.end();
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
+      send({ type: "error", message: error.issues });
+      return res.end();
+    }
+    const message = error instanceof Error ? error.message : "Unknown error";
+    send({ type: "error", message });
+    return res.end();
   }
 });
 

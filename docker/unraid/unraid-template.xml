@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <Container version="2">
   <Name>AudiobookRenamer</Name>
-  <Repository>nickhighland/audiobookrenamer:0.1.2</Repository>
+  <Repository>nickhighland/audiobookrenamer:0.1.4</Repository>
   <Registry>https://hub.docker.com/r/nickhighland/audiobookrenamer</Registry>
   <Network>bridge</Network>
   <MyIP/>

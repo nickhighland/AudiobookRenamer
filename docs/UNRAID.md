@@ -23,14 +23,14 @@ Notes:
 Import the provided `docker/unraid/unraid-template.xml` into Community Applications (Advanced → Import Template) or use it as reference to create a new container via the UI.
 
 Template improvements included:
-- Uses fixed image tag `nickhighland/audiobookrenamer:0.1.2` (you can change to `:latest` later if you prefer).
+- Uses fixed image tag `nickhighland/audiobookrenamer:0.1.4` (you can change to `:latest` later if you prefer).
 - Sets correct default WebUI/API port (`4033`).
 - Marks `OPENAI_API_KEY` as required and masked.
 - Includes advanced environment options: `GOOGLE_BOOKS_API_KEY`, `PORT`, `NODE_ENV`, `TZ`.
 - Includes project/support metadata for easier maintenance.
 
 Key settings to configure in the Unraid UI:
-- Repository: `nickhighland/audiobookrenamer:0.1.2` (recommended) or `nickhighland/audiobookrenamer:latest`
+- Repository: `nickhighland/audiobookrenamer:0.1.4` (recommended) or `nickhighland/audiobookrenamer:latest`
 - Network Type: `bridge` (or host if you prefer)
 - Host Ports: map host `4033` → container `4033` (or keep container `4033` and use another host port)
 - WebUI: use `http://[IP]:[PORT:4033]/` for the browser frontend (`/health` remains available for health checks)
@@ -49,6 +49,10 @@ Naming/folder placeholders available in the Web UI:
 Examples:
 - Naming template: `{author} - {title} - Part {part}{ext}`
 - Folder template: `{author}/{series}/{title}`
+
+OpenAI model selection in the Web UI:
+- Use `Refresh Models` to load all available GPT-4 and GPT-5 chat models from your API key.
+- Select your desired model from the dropdown before running organize.
 
 Troubleshooting & tips
 - If embedding fails due to missing `ffmpeg`, either rebuild the image to include `ffmpeg` or run a helper container with `ffmpeg` and share files via a common mount.

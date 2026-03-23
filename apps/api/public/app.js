@@ -3,6 +3,8 @@ const $ = (id) => document.getElementById(id);
 const outputEl = $("output");
 const namingTemplateInput = $("namingTemplate");
 const folderTemplateInput = $("folderTemplate");
+const openAiModelSelect = $("openAiModel");
+const refreshModelsBtn = $("refreshModelsBtn");
 let activeTemplateInput = namingTemplateInput;
 
 function setActiveTemplateInput(inputEl) {
@@ -73,13 +75,66 @@ function buildBasePayload() {
     createBookFolder: $("createBookFolder").checked,
     metadataProviderOrder: selectedProviders(),
     providerApiKeys,
-    openAiModel: $("openAiModel").value.trim() || undefined,
+    openAiModel: openAiModelSelect.value || undefined,
     openAiApiKey: $("openAiApiKey").value.trim() || undefined,
     conflictPolicy: $("conflictPolicy").value,
     highReliabilityThreshold: Number($("highReliabilityThreshold").value || 0.8),
     embedCoverInAudio: $("embedCoverInAudio").checked,
     embedMetadataInAudio: $("embedMetadataInAudio").checked,
   };
+}
+
+function setModelOptions(models) {
+  const current = openAiModelSelect.value || "gpt-5-mini";
+  openAiModelSelect.innerHTML = "";
+
+  const preferred = [
+    "gpt-5",
+    "gpt-5-mini",
+    "gpt-5-nano",
+    "gpt-4.1",
+    "gpt-4.1-mini",
+    "gpt-4o",
+    "gpt-4o-mini",
+    "gpt-4-turbo",
+    "gpt-4",
+  ];
+
+  const merged = Array.from(new Set([...preferred, ...models]))
+    .filter((model) => model.startsWith("gpt-4") || model.startsWith("gpt-5"))
+    .sort((a, b) => a.localeCompare(b));
+
+  for (const model of merged) {
+    const option = document.createElement("option");
+    option.value = model;
+    option.textContent = model;
+    openAiModelSelect.appendChild(option);
+  }
+
+  openAiModelSelect.value = merged.includes(current) ? current : (merged.includes("gpt-5-mini") ? "gpt-5-mini" : merged[0]);
+}
+
+async function loadOpenAiModels() {
+  try {
+    refreshModelsBtn.disabled = true;
+    refreshModelsBtn.textContent = "Loading...";
+
+    const payload = {};
+    const openAiApiKey = $("openAiApiKey").value.trim();
+    if (openAiApiKey) {
+      payload.openAiApiKey = openAiApiKey;
+    }
+
+    const result = await postJson("/openai/models", payload);
+    const models = Array.isArray(result.models) ? result.models : [];
+    setModelOptions(models);
+    appendOutput("Models", { loaded: models.length, filter: "gpt-4/gpt-5" });
+  } catch (error) {
+    appendOutput("Models Error", String(error));
+  } finally {
+    refreshModelsBtn.disabled = false;
+    refreshModelsBtn.textContent = "Refresh Models";
+  }
 }
 
 $("scanBtn").addEventListener("click", async () => {
@@ -137,7 +192,14 @@ $("clearOutput").addEventListener("click", () => {
   outputEl.textContent = "Ready.";
 });
 
+refreshModelsBtn.addEventListener("click", () => {
+  loadOpenAiModels();
+});
+
 fetch("/api")
   .then((res) => res.json())
-  .then((info) => appendOutput("Service", info))
+  .then((info) => {
+    appendOutput("Service", info);
+    return loadOpenAiModels();
+  })
   .catch(() => appendOutput("Service", "Unable to load /api status"));
