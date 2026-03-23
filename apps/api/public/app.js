@@ -7,6 +7,7 @@ const openAiModelSelect = $("openAiModel");
 const refreshModelsBtn = $("refreshModelsBtn");
 const saveSettingsBtn = $("saveSettingsBtn");
 const organizeBtn = $("organizeBtn");
+const stopOrganizeBtn = $("stopOrganizeBtn");
 const runStatusEl = $("runStatus");
 const buildInfoEl = $("buildInfo");
 const reviewFilePathEl = $("reviewFilePath");
@@ -24,6 +25,8 @@ const nextReviewBtn = $("nextReviewBtn");
 const saveReviewDecisionBtn = $("saveReviewDecisionBtn");
 
 const SETTINGS_KEY = "aon.web.settings.v1";
+
+let activeOrganizeController = null;
 
 let activeTemplateInput = namingTemplateInput;
 const reviewState = {
@@ -316,11 +319,12 @@ function buildBasePayload() {
   };
 }
 
-async function organizeWithRealtime(payload) {
+async function organizeWithRealtime(payload, signal) {
   const response = await fetch("/organize/stream", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
+    signal,
   });
 
   if (!response.ok || !response.body) {
@@ -455,16 +459,30 @@ organizeBtn.addEventListener("click", async () => {
 
     organizeBtn.disabled = true;
     organizeBtn.textContent = "Running...";
+    stopOrganizeBtn.disabled = false;
+    activeOrganizeController = new AbortController();
     setRunStatus("Starting organizer...");
     await saveSettings();
-    await organizeWithRealtime(payload);
+    await organizeWithRealtime(payload, activeOrganizeController.signal);
   } catch (error) {
-    appendOutput("Organize Error", String(error));
-    setRunStatus("Error.");
+    if (error && error.name === "AbortError") {
+      appendOutput("Organize", "Stopped by user.");
+      setRunStatus("Stopped by user.");
+    } else {
+      appendOutput("Organize Error", String(error));
+      setRunStatus("Error.");
+    }
   } finally {
     organizeBtn.disabled = false;
     organizeBtn.textContent = "Run Organize";
+    stopOrganizeBtn.disabled = true;
+    activeOrganizeController = null;
   }
+});
+
+stopOrganizeBtn.addEventListener("click", () => {
+  if (!activeOrganizeController) return;
+  activeOrganizeController.abort();
 });
 
 $("metadataSearchBtn").addEventListener("click", async () => {

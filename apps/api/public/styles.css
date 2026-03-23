@@ -271,6 +271,18 @@ button.secondary {
   background: #122233;
 }
 
+button.danger {
+  background: linear-gradient(90deg, #c43a4d, #e35467);
+  border-color: transparent;
+  color: #fff4f6;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
 button.small {
   padding: 8px 10px;
 }

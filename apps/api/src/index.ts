@@ -254,6 +254,11 @@ app.post("/organize/stream", async (req: Request, res: Response) => {
     res.write(`${JSON.stringify(event)}\n`);
   };
 
+  let cancelled = false;
+  req.on("close", () => {
+    cancelled = true;
+  });
+
   try {
     const parsed = organizeSchema.parse(req.body);
     const openAiApiKey = parsed.openAiApiKey || process.env.OPENAI_API_KEY;
@@ -266,6 +271,7 @@ app.post("/organize/stream", async (req: Request, res: Response) => {
       config: unknown,
       openAiApiKey: string,
       onProgress: (event: unknown) => void,
+      shouldStop: () => boolean,
     ) => Promise<unknown>)(
       {
         inputDir: parsed.inputDir,
@@ -288,6 +294,7 @@ app.post("/organize/stream", async (req: Request, res: Response) => {
       },
       openAiApiKey,
       (event: unknown) => send(event),
+      () => cancelled,
     );
 
     send({ type: "result", result });

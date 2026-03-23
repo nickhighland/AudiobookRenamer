@@ -191,6 +191,7 @@ export async function organizeAudiobooks(
   config: OrganizerConfig,
   openAiApiKey: string,
   onProgress?: (event: OrganizeProgressEvent) => void,
+  shouldStop?: () => boolean,
 ): Promise<OrganizeResult> {
   const warnings: string[] = [];
   const actions: OrganizeAction[] = [];
@@ -211,6 +212,15 @@ export async function organizeAudiobooks(
   });
 
   for (const [idx, candidate] of candidates.entries()) {
+    if (shouldStop?.()) {
+      onProgress?.({
+        type: "complete",
+        total: candidates.length,
+        message: "Stopped by user. Returning partial results.",
+      });
+      break;
+    }
+
     onProgress?.({
       type: "item_started",
       index: idx + 1,
