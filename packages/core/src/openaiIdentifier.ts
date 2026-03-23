@@ -202,7 +202,9 @@ export class OpenAiIdentifier {
         return draft;
       }
 
-      return normalizeIdentity(candidate, parsed.data);
+      const normalizedIdentity = normalizeIdentity(candidate, parsed.data);
+      applyProviderSwapCorrection(candidate, normalizedIdentity, providerCandidates);
+      return normalizedIdentity;
     } catch {
       return draft;
     }
@@ -239,7 +241,67 @@ function normalizeIdentity(candidate: AudioFileCandidate, identity: BookIdentity
     normalized.title = candidate.guessedTitle ?? "Unknown Title";
   }
 
+  applyGuessedHintSwapCorrection(candidate, normalized);
+
   return normalized;
+}
+
+function normalizeTokenString(value?: string): string {
+  return (value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isCloseMatch(a?: string, b?: string): boolean {
+  const left = normalizeTokenString(a);
+  const right = normalizeTokenString(b);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  return left.includes(right) || right.includes(left);
+}
+
+function applyGuessedHintSwapCorrection(candidate: AudioFileCandidate, identity: BookIdentity): void {
+  const guessedTitle = candidate.guessedTitle;
+  const guessedAuthor = candidate.guessedAuthor;
+  const author = identity.authors?.[0];
+
+  if (!guessedTitle || !guessedAuthor || !author || !identity.title) return;
+
+  const authorLooksLikeTitle = isCloseMatch(author, guessedTitle);
+  const titleLooksLikeAuthor = isCloseMatch(identity.title, guessedAuthor);
+  if (authorLooksLikeTitle && titleLooksLikeAuthor) {
+    identity.authors = [guessedAuthor, ...identity.authors.filter((a) => a !== author)];
+    identity.title = guessedTitle;
+    identity.notes = identity.notes
+      ? `${identity.notes} | corrected author/title swap from filename hints`
+      : "corrected author/title swap from filename hints";
+  }
+}
+
+function applyProviderSwapCorrection(
+  candidate: AudioFileCandidate,
+  identity: BookIdentity,
+  providerCandidates: Array<{ provider: string; title: string; authors: string[]; publishedYear?: string }>,
+): void {
+  const author = identity.authors?.[0];
+  if (!author || !identity.title) return;
+
+  const swapCandidate = providerCandidates.find((pc) => {
+    const titleMatchesAuthor = isCloseMatch(pc.title, author);
+    const authorMatchesTitle = pc.authors.some((a) => isCloseMatch(a, identity.title));
+    return titleMatchesAuthor && authorMatchesTitle;
+  });
+
+  if (!swapCandidate) return;
+
+  const correctedAuthor = swapCandidate.authors[0] ?? candidate.guessedAuthor ?? author;
+  identity.title = swapCandidate.title;
+  identity.authors = [correctedAuthor, ...swapCandidate.authors.slice(1)];
+  identity.notes = identity.notes
+    ? `${identity.notes} | corrected author/title swap from provider candidate`
+    : "corrected author/title swap from provider candidate";
 }
 
 function extractJsonObject(content: string): string | null {
@@ -280,4 +342,53 @@ export async function listOpenAiModels(apiKey: string): Promise<string[]> {
 
   const merged = [...new Set([...preferred, ...fetched])];
   return merged;
+}
+
+function hasNoiseOnlyPattern(value?: string): boolean {
+  const normalized = normalizeTokenString(value);
+  if (!normalized) return false;
+  const noisyTerms = ["music", "soundtrack", "theme", "triumphant", "ambient", "sfx"];
+  return noisyTerms.some((term) => normalized.includes(term));
+}
+
+function calibrateConfidenceFromFilenameHints(candidate: AudioFileCandidate, identity: BookIdentity): void {
+  const guessedTitle = candidate.guessedTitle;
+  const guessedAuthor = candidate.guessedAuthor;
+  const author = identity.authors?.[0];
+
+  const titleMatch = isCloseMatch(identity.title, guessedTitle);
+  const authorMatch = isCloseMatch(author, guessedAuthor);
+
+  // Strong disagreement with filename hints should prevent "high reliability" moves.
+  if (guessedTitle && guessedAuthor && !titleMatch && !authorMatch) {
+    identity.confidence = Math.min(identity.confidence, 0.45);
+  } else if ((guessedTitle || guessedAuthor) && (!titleMatch || !authorMatch)) {
+    identity.confidence = Math.min(identity.confidence, 0.72);
+  }
+
+  if (hasNoiseOnlyPattern(author) || hasNoiseOnlyPattern(identity.title)) {
+    identity.confidence = Math.min(identity.confidence, 0.4);
+  }
+}
+
+function calibrateConfidenceFromProviderEvidence(
+  identity: BookIdentity,
+  providerCandidates: Array<{ provider: string; title: string; authors: string[]; publishedYear?: string }>,
+): void {
+  if (providerCandidates.length === 0) {
+    identity.confidence = Math.min(identity.confidence, 0.65);
+    return;
+  }
+
+  const titleSupported = providerCandidates.some((pc) => isCloseMatch(pc.title, identity.title));
+  const authorSupported = providerCandidates.some((pc) => pc.authors.some((a) => isCloseMatch(a, identity.authors?.[0])));
+
+  if (!titleSupported && !authorSupported) {
+    identity.confidence = Math.min(identity.confidence, 0.5);
+    return;
+  }
+
+  if (!titleSupported || !authorSupported) {
+    identity.confidence = Math.min(identity.confidence, 0.75);
+  }
 }

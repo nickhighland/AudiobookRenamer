@@ -26,12 +26,46 @@ function isSuspiciousIdentity(identity: { title: string; authors: string[]; part
   return false;
 }
 
+function isLikelyAuthorTitleDisagreement(
+  identity: { title: string; authors: string[] },
+  candidate: { guessedTitle?: string; guessedAuthor?: string },
+): boolean {
+  const title = (identity.title ?? "").trim().toLowerCase();
+  const author = (identity.authors?.[0] ?? "").trim().toLowerCase();
+  const guessedTitle = (candidate.guessedTitle ?? "").trim().toLowerCase();
+  const guessedAuthor = (candidate.guessedAuthor ?? "").trim().toLowerCase();
+
+  if (!title || !author || (!guessedTitle && !guessedAuthor)) return false;
+
+  const authorLooksLikeTitle = guessedTitle && (author === guessedTitle || author.includes(guessedTitle) || guessedTitle.includes(author));
+  const titleLooksLikeAuthor = guessedAuthor && (title === guessedAuthor || title.includes(guessedAuthor) || guessedAuthor.includes(title));
+  return Boolean(authorLooksLikeTitle || titleLooksLikeAuthor);
+}
+
+function isHighReliabilityCandidate(
+  identity: { title: string; authors: string[]; part?: string; confidence: number },
+  metadata: { source?: string },
+  threshold: number,
+): { ok: boolean; reason?: string } {
+  if (isSuspiciousIdentity(identity)) {
+    return { ok: false, reason: "Suspicious title/author structure." };
+  }
+  if (identity.confidence < threshold) {
+    return { ok: false, reason: `Confidence ${identity.confidence.toFixed(2)} below threshold ${threshold.toFixed(2)}.` };
+  }
+  if (metadata.source === "openai") {
+    return { ok: false, reason: "No provider-backed metadata match." };
+  }
+  return { ok: true };
+}
+
 export interface OrganizeProgressEvent {
   type:
     | "started"
     | "scan_complete"
     | "item_started"
     | "metadata_resolved"
+    | "manual_review_item"
     | "item_completed"
     | "warning"
     | "complete";
@@ -40,6 +74,7 @@ export interface OrganizeProgressEvent {
   source?: string;
   destination?: string;
   status?: "moved" | "skipped" | "manual_review";
+  manualReviewItem?: ManualReviewItem;
   message?: string;
 }
 
@@ -267,23 +302,35 @@ export async function organizeAudiobooks(
       }
     }
 
-    if (!metadata || metadata.source === "openai" || isSuspiciousIdentity(identity)) {
+    const shouldReconcileIdentity =
+      !metadata
+      || metadata.source === "openai"
+      || isSuspiciousIdentity(identity)
+      || identity.confidence < highReliabilityThreshold
+      || isLikelyAuthorTitleDisagreement(identity, candidate);
+
+    if (shouldReconcileIdentity) {
       const providerCandidates: Array<{ provider: string; title: string; authors: string[]; publishedYear?: string }> = [];
-      const candidateQuery = [candidate.guessedAuthor, candidate.guessedTitle, candidate.fileName.replace(/\.[^.]+$/, "")]
-        .filter(Boolean)
-        .join(" ")
-        .trim();
+      const queryVariants = [
+        [candidate.guessedAuthor, candidate.guessedTitle].filter(Boolean).join(" ").trim(),
+        [identity.authors[0], identity.title].filter(Boolean).join(" ").trim(),
+        candidate.fileName.replace(/\.[^.]+$/, "").trim(),
+        candidate.guessedTitle?.trim() ?? "",
+        identity.title.trim(),
+      ].filter((q, i, arr) => q.length > 0 && arr.indexOf(q) === i);
 
       for (const provider of providers) {
         try {
-          const found = await provider.search(candidateQuery || identity.title);
-          for (const item of found.slice(0, 3)) {
-            providerCandidates.push({
-              provider: provider.name,
-              title: item.title,
-              authors: item.authors,
-              publishedYear: item.publishedYear,
-            });
+          for (const query of queryVariants) {
+            const found = await provider.search(query);
+            for (const item of found.slice(0, 3)) {
+              providerCandidates.push({
+                provider: provider.name,
+                title: item.title,
+                authors: item.authors,
+                publishedYear: item.publishedYear,
+              });
+            }
           }
         } catch {
           // ignore provider candidate collection failures
@@ -325,6 +372,56 @@ export async function organizeAudiobooks(
       message: `Metadata selected for ${candidate.relativePath}`,
     });
 
+    if (conflictPolicy === "rename_if_high_reliability") {
+      const reliability = isHighReliabilityCandidate(identity, metadata, highReliabilityThreshold);
+      if (!reliability.ok) {
+        const ctx = templateContextFrom(metadata, candidate.extension, identity.part, identity.chapter);
+        const folderTemplate = config.createBookFolder === false
+          ? ""
+          : (config.folderTemplate ?? DEFAULT_BOOK_FOLDER_TEMPLATE);
+        const relativeBookFolder = folderTemplate ? buildFolderRelativePath(folderTemplate, ctx) : "";
+        const relativeFile = buildOutputRelativePath(config.namingTemplate ?? DEFAULT_NAMING_TEMPLATE, ctx);
+        const reviewDestination = path.resolve(config.outputDir, relativeBookFolder, relativeFile);
+
+        const manualReviewItem: ManualReviewItem = {
+          source: candidate.absolutePath,
+          proposedDestination: reviewDestination,
+          reason: reliability.reason ?? "Low reliability match requires review.",
+          metadata,
+        };
+
+        actions.push({
+          source: candidate.absolutePath,
+          destination: reviewDestination,
+          metadata,
+          status: "manual_review",
+          reason: reliability.reason ?? "Low reliability match requires review.",
+          confidence: identity.confidence,
+        });
+        manualReviewItems.push(manualReviewItem);
+        onProgress?.({
+          type: "manual_review_item",
+          index: idx + 1,
+          total: candidates.length,
+          source: candidate.relativePath,
+          destination: reviewDestination,
+          status: "manual_review",
+          manualReviewItem,
+          message: `Queued for manual review due to low reliability: ${candidate.relativePath}`,
+        });
+        onProgress?.({
+          type: "item_completed",
+          index: idx + 1,
+          total: candidates.length,
+          source: candidate.relativePath,
+          destination: reviewDestination,
+          status: "manual_review",
+          message: reliability.reason ?? "Low reliability match requires review.",
+        });
+        continue;
+      }
+    }
+
     const ctx = templateContextFrom(metadata, candidate.extension, identity.part, identity.chapter);
     const folderTemplate = config.createBookFolder === false
       ? ""
@@ -364,6 +461,12 @@ export async function organizeAudiobooks(
       }
 
       if (conflictPolicy === "manual_review") {
+        const manualReviewItem: ManualReviewItem = {
+          source: candidate.absolutePath,
+          proposedDestination: destination,
+          reason,
+          metadata,
+        };
         actions.push({
           source: candidate.absolutePath,
           destination,
@@ -371,11 +474,16 @@ export async function organizeAudiobooks(
           status: "manual_review",
           reason,
         });
-        manualReviewItems.push({
-          source: candidate.absolutePath,
-          proposedDestination: destination,
-          reason,
-          metadata,
+        manualReviewItems.push(manualReviewItem);
+        onProgress?.({
+          type: "manual_review_item",
+          index: idx + 1,
+          total: candidates.length,
+          source: candidate.relativePath,
+          destination,
+          status: "manual_review",
+          manualReviewItem,
+          message: `Queued for manual review: ${candidate.relativePath}`,
         });
         onProgress?.({
           type: "item_completed",
@@ -393,6 +501,12 @@ export async function organizeAudiobooks(
         if (identity.confidence >= highReliabilityThreshold) {
           destination = await findAvailablePath(destination);
         } else {
+          const manualReviewItem: ManualReviewItem = {
+            source: candidate.absolutePath,
+            proposedDestination: destination,
+            reason: `${reason} Low confidence match requires review.`,
+            metadata,
+          };
           actions.push({
             source: candidate.absolutePath,
             destination,
@@ -401,11 +515,16 @@ export async function organizeAudiobooks(
             reason: `${reason} Confidence ${identity.confidence.toFixed(2)} below threshold ${highReliabilityThreshold.toFixed(2)}.`,
             confidence: identity.confidence,
           });
-          manualReviewItems.push({
-            source: candidate.absolutePath,
-            proposedDestination: destination,
-            reason: `${reason} Low confidence match requires review.`,
-            metadata,
+          manualReviewItems.push(manualReviewItem);
+          onProgress?.({
+            type: "manual_review_item",
+            index: idx + 1,
+            total: candidates.length,
+            source: candidate.relativePath,
+            destination,
+            status: "manual_review",
+            manualReviewItem,
+            message: `Queued low-confidence item for manual review: ${candidate.relativePath}`,
           });
           onProgress?.({
             type: "item_completed",

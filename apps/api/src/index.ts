@@ -10,13 +10,30 @@ import { dirname, resolve } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import fs from "node:fs/promises";
 
-import { applyManualReview, listOpenAiModels, organizeAudiobooks, scanAudiobookFiles, searchMetadata } from "@aon/core";
+import { applyManualReview, applyManualReviewItems, listOpenAiModels, organizeAudiobooks, scanAudiobookFiles, searchMetadata } from "@aon/core";
+import type { ManualReviewItem } from "@aon/core";
 
 const app = express();
 const currentFile = fileURLToPath(import.meta.url);
 const currentDir = dirname(currentFile);
 const publicDir = resolve(currentDir, "../public");
 const settingsPath = resolve(process.env.APP_DATA_DIR ?? "/app/data", "web-settings.json");
+
+interface LiveManualReviewQueue {
+  runId: string | null;
+  generatedAt: string | null;
+  reviewFilePath: string | null;
+  isRunning: boolean;
+  items: ManualReviewItem[];
+}
+
+const liveManualReviewQueue: LiveManualReviewQueue = {
+  runId: null,
+  generatedAt: null,
+  reviewFilePath: null,
+  isRunning: false,
+  items: [],
+};
 
 const apiPackageVersion = (() => {
   try {
@@ -77,7 +94,7 @@ const organizeSchema = z.object({
 });
 
 const applyManualReviewSchema = z.object({
-  reviewFilePath: z.string().min(1),
+  reviewFilePath: z.string().min(1).optional(),
   dryRun: z.boolean().optional(),
   embedCoverInAudio: z.boolean().optional(),
   embedMetadataInAudio: z.boolean().optional(),
@@ -108,7 +125,7 @@ const applyManualReviewSchema = z.object({
 });
 
 const loadManualReviewSchema = z.object({
-  reviewFilePath: z.string().min(1),
+  reviewFilePath: z.string().min(1).optional(),
 });
 
 const metadataSearchSchema = z.object({
@@ -266,6 +283,13 @@ app.post("/organize/stream", async (req: Request, res: Response) => {
   });
 
   try {
+    const runId = `run-${Date.now()}`;
+    liveManualReviewQueue.runId = runId;
+    liveManualReviewQueue.generatedAt = new Date().toISOString();
+    liveManualReviewQueue.reviewFilePath = null;
+    liveManualReviewQueue.isRunning = true;
+    liveManualReviewQueue.items = [];
+
     const parsed = organizeSchema.parse(req.body);
     const openAiApiKey = parsed.openAiApiKey || process.env.OPENAI_API_KEY;
     if (!openAiApiKey) {
@@ -299,13 +323,32 @@ app.post("/organize/stream", async (req: Request, res: Response) => {
         embedMetadataInAudio: parsed.embedMetadataInAudio,
       },
       openAiApiKey,
-      (event: unknown) => send(event),
+      (event: unknown) => {
+        const evt = event as {
+          type?: string;
+          manualReviewItem?: ManualReviewItem;
+        };
+        if (evt.type === "manual_review_item" && evt.manualReviewItem) {
+          liveManualReviewQueue.items.push(evt.manualReviewItem);
+        }
+        if (evt.type === "complete") {
+          liveManualReviewQueue.isRunning = false;
+        }
+        send(event);
+      },
       () => cancelled,
     );
+
+    const typedResult = result as { manualReviewPath?: string };
+    if (typedResult?.manualReviewPath) {
+      liveManualReviewQueue.reviewFilePath = typedResult.manualReviewPath;
+    }
+    liveManualReviewQueue.isRunning = false;
 
     send({ type: "result", result });
     return res.end();
   } catch (error: unknown) {
+    liveManualReviewQueue.isRunning = false;
     if (error instanceof z.ZodError) {
       send({ type: "error", message: error.issues });
       return res.end();
@@ -319,13 +362,25 @@ app.post("/organize/stream", async (req: Request, res: Response) => {
 app.post("/manual-review/apply", async (req: Request, res: Response) => {
   try {
     const parsed = applyManualReviewSchema.parse(req.body);
-    const result = await applyManualReview(
-      parsed.reviewFilePath,
-      parsed.decisions,
-      parsed.dryRun ?? false,
-      parsed.embedCoverInAudio ?? false,
-      parsed.embedMetadataInAudio ?? true,
-    );
+    const result = parsed.reviewFilePath
+      ? await applyManualReview(
+          parsed.reviewFilePath,
+          parsed.decisions,
+          parsed.dryRun ?? false,
+          parsed.embedCoverInAudio ?? false,
+          parsed.embedMetadataInAudio ?? true,
+        )
+      : await applyManualReviewItems(
+          liveManualReviewQueue.items,
+          parsed.decisions,
+          parsed.dryRun ?? false,
+          parsed.embedCoverInAudio ?? false,
+          parsed.embedMetadataInAudio ?? true,
+        );
+
+    if (!parsed.reviewFilePath) {
+      liveManualReviewQueue.items = [];
+    }
     return res.json(result);
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
@@ -339,6 +394,17 @@ app.post("/manual-review/apply", async (req: Request, res: Response) => {
 app.post("/manual-review/load", async (req: Request, res: Response) => {
   try {
     const parsed = loadManualReviewSchema.parse(req.body ?? {});
+    if (!parsed.reviewFilePath) {
+      return res.json({
+        runId: liveManualReviewQueue.runId,
+        reviewFilePath: liveManualReviewQueue.reviewFilePath,
+        generatedAt: liveManualReviewQueue.generatedAt,
+        isRunning: liveManualReviewQueue.isRunning,
+        count: liveManualReviewQueue.items.length,
+        items: liveManualReviewQueue.items,
+      });
+    }
+
     const raw = await fs.readFile(parsed.reviewFilePath, "utf-8");
     const doc = JSON.parse(raw) as { generatedAt?: string; items?: unknown[] };
     const items = Array.isArray(doc.items) ? doc.items : [];

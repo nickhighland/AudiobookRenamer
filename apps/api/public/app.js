@@ -127,18 +127,23 @@ function saveCurrentDecision() {
 }
 
 async function loadReviewFile(path) {
-  const result = await postJson("/manual-review/load", { reviewFilePath: path });
+  const payload = path ? { reviewFilePath: path } : {};
+  const result = await postJson("/manual-review/load", payload);
   reviewState.reviewFilePath = result.reviewFilePath;
   reviewState.items = Array.isArray(result.items) ? result.items : [];
   reviewState.index = 0;
   reviewState.decisions = new Map();
-  reviewFilePathEl.value = result.reviewFilePath || path;
-  setReviewStatus(`Loaded ${reviewState.items.length} review item(s).`);
+  reviewFilePathEl.value = result.reviewFilePath || "";
+  if (result.isRunning) {
+    setReviewStatus(`Live queue: ${reviewState.items.length} item(s) and growing...`);
+  } else {
+    setReviewStatus(`Loaded ${reviewState.items.length} review item(s).`);
+  }
   renderReviewItem();
 }
 
 async function applyReviewDecisions() {
-  if (!reviewState.reviewFilePath || !reviewState.items.length) {
+  if (!reviewState.items.length) {
     setReviewStatus("No review items loaded.");
     return;
   }
@@ -152,16 +157,24 @@ async function applyReviewDecisions() {
     };
   });
 
-  const result = await postJson("/manual-review/apply", {
-    reviewFilePath: reviewState.reviewFilePath,
+  const body = {
     decisions,
     dryRun: $("dryRun").checked,
     embedCoverInAudio: $("embedCoverInAudio").checked,
     embedMetadataInAudio: $("embedMetadataInAudio").checked,
-  });
+  };
+  if (reviewState.reviewFilePath) {
+    body.reviewFilePath = reviewState.reviewFilePath;
+  }
+
+  const result = await postJson("/manual-review/apply", body);
 
   appendOutput("Manual Review Apply Result", result);
   setReviewStatus(`Applied decisions. moved=${result.moved?.length || 0}, skipped=${result.skipped?.length || 0}`);
+  reviewState.items = [];
+  reviewState.index = 0;
+  reviewState.decisions = new Map();
+  renderReviewItem();
 }
 
 function settingsSnapshot() {
@@ -353,15 +366,29 @@ async function organizeWithRealtime(payload, signal) {
           if (event.type === "result") {
             appendOutput("Organize Result", event.result);
             setRunStatus("Completed.");
-            if (event.result?.manualReviewPath) {
-              reviewFilePathEl.value = event.result.manualReviewPath;
-              loadReviewFile(event.result.manualReviewPath)
-                .then(() => appendOutput("Manual Review", `Loaded ${event.result.manualReviewPath}`))
-                .catch((error) => appendOutput("Manual Review Error", String(error)));
-            }
+            loadReviewFile("")
+              .then(() => appendOutput("Manual Review", "Loaded latest live queue"))
+              .catch((error) => appendOutput("Manual Review Error", String(error)));
           } else if (event.type === "error") {
             appendOutput("Organize Error", event.message ?? event);
             setRunStatus("Error.");
+          } else if (event.type === "manual_review_item") {
+            const incoming = event.manualReviewItem;
+            if (incoming && incoming.source) {
+              const exists = reviewState.items.some((item) => item.source === incoming.source);
+              if (!exists) {
+                reviewState.items.push(incoming);
+                if (reviewState.items.length === 1) {
+                  reviewState.index = 0;
+                }
+                renderReviewItem();
+                setReviewStatus(`Live queue updated: ${reviewState.items.length} item(s).`);
+              }
+            }
+            const progress = event.total && event.index ? `(${event.index}/${event.total}) ` : "";
+            const message = event.message || "Manual review item queued.";
+            appendOutput("Organize Progress", `${progress}${message}`);
+            setRunStatus(`${progress}${message}`);
           } else {
             const progress = event.total && event.index ? `(${event.index}/${event.total}) ` : "";
             const message = event.message || JSON.stringify(event);
@@ -461,6 +488,12 @@ organizeBtn.addEventListener("click", async () => {
     organizeBtn.textContent = "Running...";
     stopOrganizeBtn.disabled = false;
     activeOrganizeController = new AbortController();
+    reviewState.items = [];
+    reviewState.index = 0;
+    reviewState.decisions = new Map();
+    reviewState.reviewFilePath = "";
+    renderReviewItem();
+    setReviewStatus("Live review queue waiting for low-certainty items...");
     setRunStatus("Starting organizer...");
     await saveSettings();
     await organizeWithRealtime(payload, activeOrganizeController.signal);
@@ -518,10 +551,6 @@ saveSettingsBtn.addEventListener("click", () => {
 loadReviewBtn.addEventListener("click", async () => {
   try {
     const reviewFilePath = reviewFilePathEl.value.trim();
-    if (!reviewFilePath) {
-      setReviewStatus("Enter a review file path first.");
-      return;
-    }
     await loadReviewFile(reviewFilePath);
   } catch (error) {
     setReviewStatus(`Failed to load review file: ${String(error)}`);

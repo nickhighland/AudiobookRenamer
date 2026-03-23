@@ -66,13 +66,30 @@ export async function applyManualReview(
   const raw = await fs.readFile(reviewFilePath, "utf-8");
   const reviewDoc = JSON.parse(raw) as ReviewDocument;
 
+  return applyManualReviewItems(
+    reviewDoc.items,
+    decisions,
+    dryRun,
+    embedCoverInAudio,
+    embedMetadataInAudio,
+  );
+}
+
+export async function applyManualReviewItems(
+  items: ManualReviewItem[],
+  decisions: ManualReviewDecision[],
+  dryRun = false,
+  embedCoverInAudio = false,
+  embedMetadataInAudio = true,
+): Promise<ApplyManualReviewResult> {
+
   const moved: OrganizeAction[] = [];
   const skipped: OrganizeAction[] = [];
   const warnings: string[] = [];
 
   const decisionMap = new Map(decisions.map((decision) => [decision.source, decision]));
 
-  for (const item of reviewDoc.items) {
+  for (const item of items) {
     const decision = decisionMap.get(item.source);
     if (!decision || decision.action === "skip") {
       skipped.push({

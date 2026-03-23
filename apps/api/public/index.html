@@ -155,19 +155,19 @@
       </section>
 
       <section class="card" id="manualReviewSection">
-        <h2>Low Certainty Manual Review</h2>
+        <h2>Low Certainty Live Review Queue</h2>
         <div class="grid two">
           <label>
-            Review File Path
-            <input id="reviewFilePath" placeholder="/app/data/manual-review/manual-review-...json" />
+            Review File Path (optional)
+            <input id="reviewFilePath" placeholder="Optional: load a saved manual-review file" />
           </label>
           <div class="actions inline-actions">
-            <button id="loadReviewBtn" class="secondary">Load Review File</button>
+            <button id="loadReviewBtn" class="secondary">Refresh Queue / Load File</button>
             <button id="applyReviewBtn" class="primary">Apply Decisions</button>
           </div>
         </div>
 
-        <p id="reviewStatus" class="hint">No review file loaded.</p>
+        <p id="reviewStatus" class="hint">Live queue idle.</p>
 
         <div class="review-panel" id="reviewPanel">
           <div class="grid two">
