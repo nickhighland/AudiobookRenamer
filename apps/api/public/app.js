@@ -8,6 +8,7 @@ const refreshModelsBtn = $("refreshModelsBtn");
 const saveSettingsBtn = $("saveSettingsBtn");
 const organizeBtn = $("organizeBtn");
 const stopOrganizeBtn = $("stopOrganizeBtn");
+const stopOrganizeTopBtn = $("stopOrganizeTopBtn");
 const runStatusEl = $("runStatus");
 const buildInfoEl = $("buildInfo");
 const reviewFilePathEl = $("reviewFilePath");
@@ -28,6 +29,9 @@ const saveReviewDecisionBtn = $("saveReviewDecisionBtn");
 const settingsBtn = $("settingsBtn");
 const settingsModal = $("settingsModal");
 const manualReviewModal = $("manualReviewModal");
+const workspaceEl = $("workspace");
+const leftColumnResizer = $("leftColumnResizer");
+const rightColumnResizer = $("rightColumnResizer");
 
 const SETTINGS_KEY = "aon.web.settings.v1";
 
@@ -55,8 +59,91 @@ function setupModalHandlers(modal) {
   }
 }
 
+function setStopButtonsDisabled(disabled) {
+  stopOrganizeBtn.disabled = disabled;
+  if (stopOrganizeTopBtn) {
+    stopOrganizeTopBtn.disabled = disabled;
+  }
+}
+
+function setupColumnResizers() {
+  if (!workspaceEl || !leftColumnResizer || !rightColumnResizer) return;
+
+  const minSide = 180;
+  const minCenter = 420;
+
+  const clampWidths = (left, right) => {
+    const available = workspaceEl.clientWidth - 16;
+    const maxSidesTotal = Math.max(minSide * 2, available - minCenter);
+    let safeLeft = Math.max(minSide, left);
+    let safeRight = Math.max(minSide, right);
+    const total = safeLeft + safeRight;
+    if (total > maxSidesTotal) {
+      const overflow = total - maxSidesTotal;
+      if (safeLeft >= safeRight) {
+        safeLeft = Math.max(minSide, safeLeft - overflow);
+      } else {
+        safeRight = Math.max(minSide, safeRight - overflow);
+      }
+    }
+    return { left: safeLeft, right: safeRight };
+  };
+
+  const applyWidths = (left, right) => {
+    const safe = clampWidths(left, right);
+    workspaceEl.style.setProperty("--left-panel-width", `${safe.left}px`);
+    workspaceEl.style.setProperty("--right-panel-width", `${safe.right}px`);
+  };
+
+  const getCurrentWidths = () => {
+    const styles = getComputedStyle(workspaceEl);
+    return {
+      left: Number.parseFloat(styles.getPropertyValue("--left-panel-width")) || 280,
+      right: Number.parseFloat(styles.getPropertyValue("--right-panel-width")) || 280,
+    };
+  };
+
+  const startDrag = (side, event) => {
+    if (window.matchMedia("(max-width: 1100px)").matches) return;
+
+    const startX = event.clientX;
+    const startWidths = getCurrentWidths();
+    const target = side === "left" ? leftColumnResizer : rightColumnResizer;
+    target.classList.add("is-dragging");
+    document.body.style.userSelect = "none";
+
+    const onMove = (moveEvent) => {
+      const delta = moveEvent.clientX - startX;
+      if (side === "left") {
+        applyWidths(startWidths.left + delta, startWidths.right);
+      } else {
+        applyWidths(startWidths.left, startWidths.right - delta);
+      }
+    };
+
+    const onUp = () => {
+      target.classList.remove("is-dragging");
+      document.body.style.userSelect = "";
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  leftColumnResizer.addEventListener("pointerdown", (event) => startDrag("left", event));
+  rightColumnResizer.addEventListener("pointerdown", (event) => startDrag("right", event));
+
+  window.addEventListener("resize", () => {
+    const current = getCurrentWidths();
+    applyWidths(current.left, current.right);
+  });
+}
+
 setupModalHandlers(settingsModal);
 setupModalHandlers(manualReviewModal);
+setupColumnResizers();
 
 settingsBtn.addEventListener("click", () => showModal(settingsModal));
 
@@ -738,7 +825,7 @@ organizeBtn.addEventListener("click", async () => {
 
     organizeBtn.disabled = true;
     organizeBtn.textContent = "Running...";
-    stopOrganizeBtn.disabled = false;
+    setStopButtonsDisabled(false);
     activeOrganizeController = new AbortController();
     organizeActions = [];
     reviewState.items = [];
@@ -763,7 +850,7 @@ organizeBtn.addEventListener("click", async () => {
   } finally {
     organizeBtn.disabled = false;
     organizeBtn.textContent = "Run Organize";
-    stopOrganizeBtn.disabled = true;
+    setStopButtonsDisabled(true);
     activeOrganizeController = null;
   }
 });
@@ -772,6 +859,13 @@ stopOrganizeBtn.addEventListener("click", () => {
   if (!activeOrganizeController) return;
   activeOrganizeController.abort();
 });
+
+if (stopOrganizeTopBtn) {
+  stopOrganizeTopBtn.addEventListener("click", () => {
+    if (!activeOrganizeController) return;
+    activeOrganizeController.abort();
+  });
+}
 
 $("metadataSearchBtn").addEventListener("click", async () => {
   try {

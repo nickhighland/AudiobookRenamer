@@ -26,11 +26,12 @@
         <div class="top-actions">
           <button id="settingsBtn" class="btn-icon" title="Settings">⚙️</button>
           <button id="scanBtn" class="primary">Scan</button>
+          <button id="stopOrganizeTopBtn" class="danger" disabled>Stop</button>
         </div>
       </header>
 
       <!-- MAIN CONTENT AREA -->
-      <div class="workspace">
+      <div class="workspace" id="workspace">
         <!-- LEFT PANEL: SCAN RESULTS HIERARCHY -->
         <div class="panel panel-left">
           <div class="panel-header">
@@ -41,6 +42,8 @@
             <p class="placeholder">Run a scan to see files grouped by detected author/title</p>
           </div>
         </div>
+
+        <div class="column-resizer" id="leftColumnResizer" role="separator" aria-label="Resize left panel"></div>
 
         <!-- CENTER: MAIN CONTROLS & OUTPUT -->
         <div class="panel panel-center">
@@ -83,6 +86,8 @@
             <button id="clearOutput" class="secondary small">Clear Log</button>
           </div>
         </div>
+
+        <div class="column-resizer" id="rightColumnResizer" role="separator" aria-label="Resize right panel"></div>
 
         <!-- RIGHT PANEL: ORGANIZE RESULTS HIERARCHY -->
         <div class="panel panel-right">
