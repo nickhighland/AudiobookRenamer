@@ -18,7 +18,7 @@
 
     <main class="layout">
       <header class="hero">
-        <p class="kicker">AudiobookRenamer</p>
+        <p class="kicker">AudiobookRenamer <span id="buildInfo" class="build-tag">build --</span></p>
         <h1>Web Console</h1>
         <p class="sub">Run scan, metadata search, and organize jobs directly from your Unraid browser tab.</p>
       </header>
@@ -151,6 +151,65 @@
           <button id="clearOutput" class="secondary small">Clear</button>
         </div>
         <pre id="output" class="output">Ready.</pre>
+      </section>
+
+      <section class="card" id="manualReviewSection">
+        <h2>Low Certainty Manual Review</h2>
+        <div class="grid two">
+          <label>
+            Review File Path
+            <input id="reviewFilePath" placeholder="/app/data/manual-review/manual-review-...json" />
+          </label>
+          <div class="actions inline-actions">
+            <button id="loadReviewBtn" class="secondary">Load Review File</button>
+            <button id="applyReviewBtn" class="primary">Apply Decisions</button>
+          </div>
+        </div>
+
+        <p id="reviewStatus" class="hint">No review file loaded.</p>
+
+        <div class="review-panel" id="reviewPanel">
+          <div class="grid two">
+            <label>
+              Source
+              <input id="reviewSource" readonly />
+            </label>
+            <label>
+              Proposed Destination
+              <input id="reviewDestination" readonly />
+            </label>
+          </div>
+
+          <label>
+            Reason
+            <input id="reviewReason" readonly />
+          </label>
+
+          <div class="grid three">
+            <label>
+              Decision
+              <select id="reviewDecisionAction">
+                <option value="approve" selected>approve</option>
+                <option value="skip">skip</option>
+                <option value="custom_destination">custom_destination</option>
+              </select>
+            </label>
+            <label>
+              Custom Destination (optional)
+              <input id="reviewCustomDestination" placeholder="/audiobooks/organized/..." />
+            </label>
+            <label>
+              Position
+              <input id="reviewPosition" readonly />
+            </label>
+          </div>
+
+          <div class="actions">
+            <button id="prevReviewBtn" class="secondary">Prev</button>
+            <button id="saveReviewDecisionBtn" class="secondary">Save Decision</button>
+            <button id="nextReviewBtn" class="secondary">Next</button>
+          </div>
+        </div>
       </section>
     </main>
 

@@ -7,7 +7,8 @@ import morgan from "morgan";
 import { z } from "zod";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import fs from "node:fs/promises";
 
 import { applyManualReview, listOpenAiModels, organizeAudiobooks, scanAudiobookFiles, searchMetadata } from "@aon/core";
 
@@ -15,6 +16,32 @@ const app = express();
 const currentFile = fileURLToPath(import.meta.url);
 const currentDir = dirname(currentFile);
 const publicDir = resolve(currentDir, "../public");
+const settingsPath = resolve(process.env.APP_DATA_DIR ?? "/app/data", "web-settings.json");
+
+const apiPackageVersion = (() => {
+  try {
+    const packagePath = resolve(currentDir, "../package.json");
+    const parsed = JSON.parse(readFileSync(packagePath, "utf-8")) as { version?: string };
+    return parsed.version ?? "0.1.0";
+  } catch {
+    return "0.1.0";
+  }
+})();
+
+async function loadStoredSettings(): Promise<Record<string, unknown>> {
+  try {
+    const content = await fs.readFile(settingsPath, "utf-8");
+    const parsed = JSON.parse(content);
+    return (parsed && typeof parsed === "object") ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+async function saveStoredSettings(settings: Record<string, unknown>): Promise<void> {
+  await fs.mkdir(resolve(settingsPath, ".."), { recursive: true });
+  await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2), "utf-8");
+}
 
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
@@ -80,6 +107,10 @@ const applyManualReviewSchema = z.object({
   ),
 });
 
+const loadManualReviewSchema = z.object({
+  reviewFilePath: z.string().min(1),
+});
+
 const metadataSearchSchema = z.object({
   query: z.string().min(1),
   providers: z.array(z.enum(["librivox", "openlibrary", "googlebooks"])).optional(),
@@ -87,6 +118,10 @@ const metadataSearchSchema = z.object({
 
 const modelListSchema = z.object({
   openAiApiKey: z.string().optional(),
+});
+
+const settingsSchema = z.object({
+  settings: z.record(z.string(), z.unknown()),
 });
 
 app.get("/health", (_req: Request, res: Response) => {
@@ -97,17 +132,42 @@ app.get("/api", (_req: Request, res: Response) => {
   res.json({
     ok: true,
     service: "audiobook-organizer-api",
+    build: {
+      version: apiPackageVersion,
+      number: process.env.APP_BUILD ?? apiPackageVersion,
+    },
     endpoints: [
       "/api",
       "/health",
+      "/settings",
       "/scan",
       "/organize",
       "/organize/stream",
+      "/manual-review/load",
       "/manual-review/apply",
       "/metadata/search",
       "/openai/models",
     ],
   });
+});
+
+app.get("/settings", async (_req: Request, res: Response) => {
+  const settings = await loadStoredSettings();
+  return res.json({ settings });
+});
+
+app.post("/settings", async (req: Request, res: Response) => {
+  try {
+    const parsed = settingsSchema.parse(req.body ?? {});
+    await saveStoredSettings(parsed.settings);
+    return res.json({ ok: true });
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.issues });
+    }
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return res.status(500).json({ error: message });
+  }
 });
 
 app.post("/openai/models", async (req: Request, res: Response) => {
@@ -254,6 +314,27 @@ app.post("/manual-review/apply", async (req: Request, res: Response) => {
       parsed.embedMetadataInAudio ?? true,
     );
     return res.json(result);
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.issues });
+    }
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return res.status(500).json({ error: message });
+  }
+});
+
+app.post("/manual-review/load", async (req: Request, res: Response) => {
+  try {
+    const parsed = loadManualReviewSchema.parse(req.body ?? {});
+    const raw = await fs.readFile(parsed.reviewFilePath, "utf-8");
+    const doc = JSON.parse(raw) as { generatedAt?: string; items?: unknown[] };
+    const items = Array.isArray(doc.items) ? doc.items : [];
+    return res.json({
+      reviewFilePath: parsed.reviewFilePath,
+      generatedAt: doc.generatedAt ?? null,
+      count: items.length,
+      items,
+    });
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.issues });

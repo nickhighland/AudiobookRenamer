@@ -8,10 +8,30 @@ const refreshModelsBtn = $("refreshModelsBtn");
 const saveSettingsBtn = $("saveSettingsBtn");
 const organizeBtn = $("organizeBtn");
 const runStatusEl = $("runStatus");
+const buildInfoEl = $("buildInfo");
+const reviewFilePathEl = $("reviewFilePath");
+const loadReviewBtn = $("loadReviewBtn");
+const applyReviewBtn = $("applyReviewBtn");
+const reviewStatusEl = $("reviewStatus");
+const reviewSourceEl = $("reviewSource");
+const reviewDestinationEl = $("reviewDestination");
+const reviewReasonEl = $("reviewReason");
+const reviewDecisionActionEl = $("reviewDecisionAction");
+const reviewCustomDestinationEl = $("reviewCustomDestination");
+const reviewPositionEl = $("reviewPosition");
+const prevReviewBtn = $("prevReviewBtn");
+const nextReviewBtn = $("nextReviewBtn");
+const saveReviewDecisionBtn = $("saveReviewDecisionBtn");
 
 const SETTINGS_KEY = "aon.web.settings.v1";
 
 let activeTemplateInput = namingTemplateInput;
+const reviewState = {
+  reviewFilePath: "",
+  items: [],
+  index: 0,
+  decisions: new Map(),
+};
 
 function setActiveTemplateInput(inputEl) {
   activeTemplateInput = inputEl;
@@ -51,6 +71,94 @@ function appendOutput(title, data) {
 
 function setRunStatus(text) {
   runStatusEl.textContent = text;
+}
+
+function setReviewStatus(text) {
+  reviewStatusEl.textContent = text;
+}
+
+function currentReviewItem() {
+  if (!reviewState.items.length) return null;
+  return reviewState.items[reviewState.index] || null;
+}
+
+function renderReviewItem() {
+  const item = currentReviewItem();
+  if (!item) {
+    reviewSourceEl.value = "";
+    reviewDestinationEl.value = "";
+    reviewReasonEl.value = "";
+    reviewPositionEl.value = "0/0";
+    reviewCustomDestinationEl.value = "";
+    return;
+  }
+
+  reviewSourceEl.value = item.source || "";
+  reviewDestinationEl.value = item.proposedDestination || "";
+  reviewReasonEl.value = item.reason || "";
+  reviewPositionEl.value = `${reviewState.index + 1}/${reviewState.items.length}`;
+
+  const saved = reviewState.decisions.get(item.source);
+  reviewDecisionActionEl.value = saved?.action || "approve";
+  reviewCustomDestinationEl.value = saved?.destination || "";
+}
+
+function saveCurrentDecision() {
+  const item = currentReviewItem();
+  if (!item) return;
+
+  const action = reviewDecisionActionEl.value;
+  const destination = reviewCustomDestinationEl.value.trim();
+
+  const decision = {
+    source: item.source,
+    action,
+  };
+
+  if (action === "custom_destination" && destination) {
+    decision.destination = destination;
+  }
+
+  reviewState.decisions.set(item.source, decision);
+  setReviewStatus(`Saved decision for ${item.source}`);
+}
+
+async function loadReviewFile(path) {
+  const result = await postJson("/manual-review/load", { reviewFilePath: path });
+  reviewState.reviewFilePath = result.reviewFilePath;
+  reviewState.items = Array.isArray(result.items) ? result.items : [];
+  reviewState.index = 0;
+  reviewState.decisions = new Map();
+  reviewFilePathEl.value = result.reviewFilePath || path;
+  setReviewStatus(`Loaded ${reviewState.items.length} review item(s).`);
+  renderReviewItem();
+}
+
+async function applyReviewDecisions() {
+  if (!reviewState.reviewFilePath || !reviewState.items.length) {
+    setReviewStatus("No review items loaded.");
+    return;
+  }
+
+  saveCurrentDecision();
+
+  const decisions = reviewState.items.map((item) => {
+    return reviewState.decisions.get(item.source) || {
+      source: item.source,
+      action: "skip",
+    };
+  });
+
+  const result = await postJson("/manual-review/apply", {
+    reviewFilePath: reviewState.reviewFilePath,
+    decisions,
+    dryRun: $("dryRun").checked,
+    embedCoverInAudio: $("embedCoverInAudio").checked,
+    embedMetadataInAudio: $("embedMetadataInAudio").checked,
+  });
+
+  appendOutput("Manual Review Apply Result", result);
+  setReviewStatus(`Applied decisions. moved=${result.moved?.length || 0}, skipped=${result.skipped?.length || 0}`);
 }
 
 function settingsSnapshot() {
@@ -133,18 +241,34 @@ function applySettings(settings) {
   }
 }
 
-function saveSettings() {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsSnapshot()));
-  appendOutput("Settings", "Saved settings to browser storage.");
+async function saveSettings() {
+  const snapshot = settingsSnapshot();
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(snapshot));
+  await postJson("/settings", { settings: snapshot });
+  appendOutput("Settings", "Saved settings and API keys to server storage.");
 }
 
-function loadSettings() {
+async function loadSettings() {
+  try {
+    const result = await fetch("/settings");
+    if (result.ok) {
+      const parsed = await result.json();
+      if (parsed && parsed.settings) {
+        applySettings(parsed.settings);
+        appendOutput("Settings", "Loaded saved settings from server.");
+        return;
+      }
+    }
+  } catch {
+    // fall through to browser fallback
+  }
+
   const raw = localStorage.getItem(SETTINGS_KEY);
   if (!raw) return;
   try {
     const parsed = JSON.parse(raw);
     applySettings(parsed);
-    appendOutput("Settings", "Loaded saved settings.");
+    appendOutput("Settings", "Loaded saved settings from browser fallback.");
   } catch {
     appendOutput("Settings", "Saved settings were invalid and were ignored.");
   }
@@ -225,6 +349,12 @@ async function organizeWithRealtime(payload) {
           if (event.type === "result") {
             appendOutput("Organize Result", event.result);
             setRunStatus("Completed.");
+            if (event.result?.manualReviewPath) {
+              reviewFilePathEl.value = event.result.manualReviewPath;
+              loadReviewFile(event.result.manualReviewPath)
+                .then(() => appendOutput("Manual Review", `Loaded ${event.result.manualReviewPath}`))
+                .catch((error) => appendOutput("Manual Review Error", String(error)));
+            }
           } else if (event.type === "error") {
             appendOutput("Organize Error", event.message ?? event);
             setRunStatus("Error.");
@@ -326,7 +456,7 @@ organizeBtn.addEventListener("click", async () => {
     organizeBtn.disabled = true;
     organizeBtn.textContent = "Running...";
     setRunStatus("Starting organizer...");
-    saveSettings();
+    await saveSettings();
     await organizeWithRealtime(payload);
   } catch (error) {
     appendOutput("Organize Error", String(error));
@@ -364,14 +494,57 @@ refreshModelsBtn.addEventListener("click", () => {
 });
 
 saveSettingsBtn.addEventListener("click", () => {
-  saveSettings();
+  saveSettings().catch((error) => appendOutput("Settings Error", String(error)));
+});
+
+loadReviewBtn.addEventListener("click", async () => {
+  try {
+    const reviewFilePath = reviewFilePathEl.value.trim();
+    if (!reviewFilePath) {
+      setReviewStatus("Enter a review file path first.");
+      return;
+    }
+    await loadReviewFile(reviewFilePath);
+  } catch (error) {
+    setReviewStatus(`Failed to load review file: ${String(error)}`);
+  }
+});
+
+saveReviewDecisionBtn.addEventListener("click", () => {
+  saveCurrentDecision();
+});
+
+prevReviewBtn.addEventListener("click", () => {
+  if (!reviewState.items.length) return;
+  saveCurrentDecision();
+  reviewState.index = Math.max(0, reviewState.index - 1);
+  renderReviewItem();
+});
+
+nextReviewBtn.addEventListener("click", () => {
+  if (!reviewState.items.length) return;
+  saveCurrentDecision();
+  reviewState.index = Math.min(reviewState.items.length - 1, reviewState.index + 1);
+  renderReviewItem();
+});
+
+applyReviewBtn.addEventListener("click", async () => {
+  try {
+    await applyReviewDecisions();
+  } catch (error) {
+    setReviewStatus(`Failed to apply decisions: ${String(error)}`);
+  }
 });
 
 fetch("/api")
   .then((res) => res.json())
-  .then((info) => {
+  .then(async (info) => {
     appendOutput("Service", info);
-    loadSettings();
+    const buildNumber = info?.build?.number || info?.build?.version || "unknown";
+    if (buildInfoEl) {
+      buildInfoEl.textContent = `build ${buildNumber}`;
+    }
+    await loadSettings();
     return loadOpenAiModels();
   })
   .catch(() => appendOutput("Service", "Unable to load /api status"));

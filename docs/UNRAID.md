@@ -23,14 +23,14 @@ Notes:
 Import the provided `docker/unraid/unraid-template.xml` into Community Applications (Advanced → Import Template) or use it as reference to create a new container via the UI.
 
 Template improvements included:
-- Uses fixed image tag `nickhighland/audiobookrenamer:0.1.6` (you can change to `:latest` later if you prefer).
+- Uses fixed image tag `nickhighland/audiobookrenamer:0.1.8` (you can change to `:latest` later if you prefer).
 - Sets correct default WebUI/API port (`4033`).
 - Marks `OPENAI_API_KEY` as required and masked.
 - Includes advanced environment options: `GOOGLE_BOOKS_API_KEY`, `PORT`, `NODE_ENV`, `TZ`.
 - Includes project/support metadata for easier maintenance.
 
 Key settings to configure in the Unraid UI:
-- Repository: `nickhighland/audiobookrenamer:0.1.6` (recommended) or `nickhighland/audiobookrenamer:latest`
+- Repository: `nickhighland/audiobookrenamer:0.1.8` (recommended) or `nickhighland/audiobookrenamer:latest`
 - Network Type: `bridge` (or host if you prefer)
 - Host Ports: map host `4033` → container `4033` (or keep container `4033` and use another host port)
 - WebUI: use `http://[IP]:[PORT:4033]/` for the browser frontend (`/health` remains available for health checks)
@@ -55,6 +55,8 @@ Organizer behavior notes:
 - Separator-aware template rendering avoids dangling separators when optional tokens are empty.
 - File operation mode supports `move` (default) or `copy`.
 - Filename heuristics now correctly handle common patterns like `Author - Title 2 of 9`.
+- Web UI settings (including API keys) now persist server-side in `/app/data/web-settings.json`.
+- Low-certainty/manual-review items can now be reviewed and applied from the Web UI.
 
 OpenAI model selection in the Web UI:
 - Use `Refresh Models` to load all available GPT-4 and GPT-5 chat models from your API key.
