@@ -3,6 +3,43 @@ import { z } from "zod";
 
 import { AudioFileCandidate, BookIdentity } from "./types.js";
 
+const IDENTITY_FIELDS_GUIDE = [
+  "Field definitions:",
+  "- title: Canonical book title only; do not include part/chapter suffixes.",
+  "- authors: Array of author names. Keep best-known author only if uncertain, never fabricate.",
+  "- part: Split-file/disc/book part indicator (e.g. 08, 2, Part 3).",
+  "- chapter: Chapter indicator only (e.g. 14, Chapter 14).",
+  "- series: Series name when clearly indicated or strongly supported by candidates.",
+  "- volumeNumber: Volume/book number inside a series (e.g. 2).",
+  "- confidence: Decimal between 0 and 1 inclusive.",
+  "- notes: Short explanation of ambiguity or correction applied.",
+].join("\n");
+
+const IDENTITY_DECISION_RULES = [
+  "Decision priorities:",
+  "1) Get author/title split correct.",
+  "2) Extract part/chapter/volume markers from suffixes and tokens.",
+  "3) Keep title clean and canonical.",
+  "4) Prefer provider-backed candidate titles over malformed filename fragments.",
+  "Hard rules:",
+  "- In 'Author - Title - 08', set authors=['Author'], title='Title', part='08'.",
+  "- In 'Author - Title 2 of 9', set part='2' and remove '2 of 9' from title.",
+  "- Never leave trailing standalone numeric suffix in title when it clearly marks a part.",
+  "- Do not invent unknown metadata.",
+].join("\n");
+
+const IDENTITY_EXAMPLES = [
+  "Examples:",
+  "Input: Michael Crichton - Rising Sun - 08.mp3",
+  'Output: {"title":"Rising Sun","authors":["Michael Crichton"],"part":"08","confidence":0.95}',
+  "Input: Brandon Sanderson - Mistborn 3 of 12.m4b",
+  'Output: {"title":"Mistborn","authors":["Brandon Sanderson"],"part":"3","confidence":0.92}',
+  "Input: The Expanse - Book 2 - Chapter 14.mp3",
+  'Output: {"title":"The Expanse","authors":["Unknown Author"],"volumeNumber":"2","chapter":"14","confidence":0.62}',
+  "Input: 01 - Dune - Frank Herbert.mp3",
+  'Output: {"title":"Dune","authors":["Frank Herbert"],"part":"01","confidence":0.88}',
+].join("\n");
+
 const IdentitySchema = z.object({
   title: z.string().min(1),
   authors: z.array(z.string().min(1)).min(1),
@@ -28,10 +65,10 @@ export class OpenAiIdentifier {
       "Infer audiobook identity details from poor filename data.",
       "Return strict JSON with keys: title, authors, part, chapter, series, volumeNumber, confidence, notes.",
       "Do not hallucinate if unknown; prefer conservative values and confidence.",
-      "Important extraction rules:",
-      "- In patterns like 'Author - Title 2 of 9', author is left side, title is right side without '2 of 9'.",
-      "- If text contains 'N of M', set part to N.",
-      "- If a guessed field looks obviously wrong (e.g. guessedAuthor contains 'of'), correct it.",
+      IDENTITY_FIELDS_GUIDE,
+      IDENTITY_DECISION_RULES,
+      IDENTITY_EXAMPLES,
+      "If a guessed field looks obviously wrong (e.g. guessedAuthor contains 'of'), correct it.",
       `relativePath: ${candidate.relativePath}`,
       `fileName: ${candidate.fileName}`,
       `guessedTitle: ${candidate.guessedTitle ?? ""}`,
@@ -44,7 +81,7 @@ export class OpenAiIdentifier {
       {
         role: "system" as const,
         content:
-          "You normalize bad audiobook file names. Extract only what can be inferred from text. Confidence must be 0..1. Prefer correcting obvious author/title swaps.",
+          "You normalize bad audiobook file names into structured metadata. Extract only what can be inferred from text. Confidence must be 0..1. Prefer correcting obvious author/title swaps and removing part suffixes from titles.",
       },
       {
         role: "user" as const,
@@ -77,42 +114,132 @@ export class OpenAiIdentifier {
     }
 
     if (!content) {
-      return {
+      return normalizeIdentity(candidate, {
         title: candidate.guessedTitle ?? "Unknown Title",
         authors: [candidate.guessedAuthor ?? "Unknown Author"],
         part: candidate.guessedPart,
         chapter: candidate.guessedChapter,
         confidence: 0.3,
         notes: "OpenAI returned empty response; fallback used.",
-      };
+      });
     }
 
     const normalized = extractJsonObject(content);
     if (!normalized) {
-      return {
+      return normalizeIdentity(candidate, {
         title: candidate.guessedTitle ?? "Unknown Title",
         authors: [candidate.guessedAuthor ?? "Unknown Author"],
         part: candidate.guessedPart,
         chapter: candidate.guessedChapter,
         confidence: 0.25,
         notes: "OpenAI response was not valid JSON; fallback used.",
-      };
+      });
     }
 
     const parsed = IdentitySchema.safeParse(JSON.parse(normalized));
     if (!parsed.success) {
-      return {
+      return normalizeIdentity(candidate, {
         title: candidate.guessedTitle ?? "Unknown Title",
         authors: [candidate.guessedAuthor ?? "Unknown Author"],
         part: candidate.guessedPart,
         chapter: candidate.guessedChapter,
         confidence: 0.25,
         notes: "OpenAI response schema mismatch; fallback used.",
-      };
+      });
     }
 
-    return parsed.data;
+    return normalizeIdentity(candidate, parsed.data);
   }
+
+  async reconcileIdentity(
+    candidate: AudioFileCandidate,
+    draft: BookIdentity,
+    providerCandidates: Array<{ provider: string; title: string; authors: string[]; publishedYear?: string }>,
+  ): Promise<BookIdentity> {
+    const prompt = [
+      "Reconcile audiobook identity from noisy filename data and candidate books.",
+      "Return strict JSON with keys: title, authors, part, chapter, series, volumeNumber, confidence, notes.",
+      IDENTITY_FIELDS_GUIDE,
+      IDENTITY_DECISION_RULES,
+      IDENTITY_EXAMPLES,
+      "If a filename has a numeric suffix (like '- 08' or '8 of 9') and candidate titles match without it, treat that number as part.",
+      "Prefer real candidate titles over malformed filename fragments when confidence supports it.",
+      `relativePath: ${candidate.relativePath}`,
+      `fileName: ${candidate.fileName}`,
+      `draftIdentity: ${JSON.stringify(draft)}`,
+      `providerCandidates: ${JSON.stringify(providerCandidates.slice(0, 12))}`,
+    ].join("\n");
+
+    try {
+      const completion = await this.client.chat.completions.create({
+        model: this.model,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              "You correct audiobook identity fields. Be conservative but fix obvious author/title swaps and split-part suffixes.",
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+      });
+
+      const content = completion.choices[0]?.message?.content;
+      if (!content) {
+        return draft;
+      }
+
+      const normalized = extractJsonObject(content);
+      if (!normalized) {
+        return draft;
+      }
+
+      const parsed = IdentitySchema.safeParse(JSON.parse(normalized));
+      if (!parsed.success) {
+        return draft;
+      }
+
+      return normalizeIdentity(candidate, parsed.data);
+    } catch {
+      return draft;
+    }
+  }
+}
+
+function normalizeIdentity(candidate: AudioFileCandidate, identity: BookIdentity): BookIdentity {
+  const normalized: BookIdentity = { ...identity };
+
+  // Trust deterministic scanner hints for obvious split-file parts.
+  if ((!normalized.part || normalized.part.trim().length === 0) && candidate.guessedPart) {
+    normalized.part = candidate.guessedPart;
+  }
+
+  const title = (normalized.title || "").trim();
+  const ofTotal = title.match(/^(.*?)(?:\s*-\s*|\s+)([0-9]{1,3})\s*of\s*[0-9]{1,3}$/i);
+  if (ofTotal) {
+    normalized.title = ofTotal[1].trim();
+    if (!normalized.part) {
+      normalized.part = ofTotal[2];
+    }
+  }
+
+  const trailingPart = normalized.title.match(/^(.*?)(?:\s*-\s*|\s+)([0-9]{1,3})$/);
+  if (trailingPart && !normalized.part) {
+    const n = Number(trailingPart[2]);
+    if (n > 0 && n < 1000) {
+      normalized.title = trailingPart[1].trim();
+      normalized.part = trailingPart[2];
+    }
+  }
+
+  if (!normalized.title || normalized.title.trim().length === 0) {
+    normalized.title = candidate.guessedTitle ?? "Unknown Title";
+  }
+
+  return normalized;
 }
 
 function extractJsonObject(content: string): string | null {

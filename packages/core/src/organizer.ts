@@ -16,6 +16,16 @@ import {
   OrganizeResult,
 } from "./types.js";
 
+function isSuspiciousIdentity(identity: { title: string; authors: string[]; part?: string }): boolean {
+  const title = identity.title?.trim() ?? "";
+  const author = (identity.authors?.[0] ?? "").trim();
+  if (!title) return true;
+  if (/\b\d{1,3}\s*of\s*\d{1,3}\b/i.test(title)) return true;
+  if (/(?:\s*-\s*|\s+)\d{1,3}$/.test(title) && !identity.part) return true;
+  if (/\d{2,}/.test(author)) return true;
+  return false;
+}
+
 export interface OrganizeProgressEvent {
   type:
     | "started"
@@ -254,6 +264,56 @@ export async function organizeAudiobooks(
           source: candidate.relativePath,
           message: `Metadata lookup failed: ${provider.name}`,
         });
+      }
+    }
+
+    if (!metadata || metadata.source === "openai" || isSuspiciousIdentity(identity)) {
+      const providerCandidates: Array<{ provider: string; title: string; authors: string[]; publishedYear?: string }> = [];
+      const candidateQuery = [candidate.guessedAuthor, candidate.guessedTitle, candidate.fileName.replace(/\.[^.]+$/, "")]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+
+      for (const provider of providers) {
+        try {
+          const found = await provider.search(candidateQuery || identity.title);
+          for (const item of found.slice(0, 3)) {
+            providerCandidates.push({
+              provider: provider.name,
+              title: item.title,
+              authors: item.authors,
+              publishedYear: item.publishedYear,
+            });
+          }
+        } catch {
+          // ignore provider candidate collection failures
+        }
+      }
+
+      const reconciled = await identifier.reconcileIdentity(candidate, identity, providerCandidates);
+      identity.title = reconciled.title;
+      identity.authors = reconciled.authors;
+      identity.part = reconciled.part;
+      identity.chapter = reconciled.chapter;
+      identity.series = reconciled.series;
+      identity.volumeNumber = reconciled.volumeNumber;
+      identity.confidence = reconciled.confidence;
+
+      if (providerCandidates.length > 0) {
+        for (const provider of providers) {
+          try {
+            const found = await provider.lookup(identity);
+            if (found) {
+              metadata = {
+                ...metadata,
+                ...found,
+              };
+              break;
+            }
+          } catch {
+            // ignore in second lookup pass
+          }
+        }
       }
     }
 

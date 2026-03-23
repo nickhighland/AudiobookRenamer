@@ -9,6 +9,7 @@ import { AudioFileCandidate } from "./types.js";
 const PART_REGEX = /(part|pt|disc|cd)\s*([0-9ivx]+)/i;
 const CHAPTER_REGEX = /(chapter|ch)\s*([0-9]+)/i;
 const OF_TOTAL_REGEX = /\b([0-9]+)\s*of\s*([0-9]+)\b/i;
+const TRAILING_PART_REGEX = /^(.*?)(?:\s*-\s*|\s+)([0-9]{1,3})$/;
 
 function toTitleCase(raw: string): string {
   return raw
@@ -40,6 +41,21 @@ function guessFromFileName(fileName: string): Pick<AudioFileCandidate, "guessedA
     if (rightOfTotal) {
       guessedPart = rightOfTotal[1];
       guessedTitle = toTitleCase(right.replace(rightOfTotal[0], "").replace(/[-_]+$/g, "").trim());
+    }
+
+    // Common split-audiobook pattern: "Author - Title - 08"
+    if (!guessedPart) {
+      const trailingPart = right.match(TRAILING_PART_REGEX);
+      if (trailingPart) {
+        const maybeTitle = trailingPart[1].trim();
+        const maybePart = trailingPart[2];
+        // Ignore likely year-like suffixes when deciding parts.
+        const n = Number(maybePart);
+        if (n > 0 && n < 1000) {
+          guessedPart = maybePart;
+          guessedTitle = toTitleCase(maybeTitle);
+        }
+      }
     }
   }
 
