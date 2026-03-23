@@ -1,6 +1,6 @@
 {
   "name": "@aon/desktop",
-  "version": "0.1.0",
+  "version": "0.1.13",
   "description": "Desktop audiobook renamer and organizer",
   "author": "AudiobookRenamer",
   "type": "module",
@@ -13,7 +13,7 @@
     "dist:win": "npm run build -w @aon/core && npm run build && electron-builder --win"
   },
   "dependencies": {
-    "@aon/core": "0.1.0",
+    "@aon/core": "0.1.13",
     "dotenv": "^16.4.7"
   },
   "devDependencies": {
