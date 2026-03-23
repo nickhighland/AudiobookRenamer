@@ -18,6 +18,7 @@ ENV NODE_ENV=production
 
 COPY package.json ./package.json
 COPY apps/api/package.json ./apps/api/package.json
+COPY apps/api/public ./apps/api/public
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/packages/core/dist ./packages/core/dist

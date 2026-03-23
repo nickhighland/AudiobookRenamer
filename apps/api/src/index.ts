@@ -5,13 +5,24 @@ import type { Request, Response } from "express";
 import cors from "cors";
 import morgan from "morgan";
 import { z } from "zod";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+import { existsSync } from "node:fs";
 
 import { applyManualReview, organizeAudiobooks, scanAudiobookFiles, searchMetadata } from "@aon/core";
 
 const app = express();
+const currentFile = fileURLToPath(import.meta.url);
+const currentDir = dirname(currentFile);
+const publicDir = resolve(currentDir, "../public");
+
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
 app.use(morgan("dev"));
+
+if (existsSync(publicDir)) {
+  app.use(express.static(publicDir));
+}
 
 const organizeSchema = z.object({
   inputDir: z.string().min(1),
@@ -77,11 +88,11 @@ app.get("/health", (_req: Request, res: Response) => {
   res.json({ ok: true, service: "audiobook-organizer-api" });
 });
 
-app.get("/", (_req: Request, res: Response) => {
+app.get("/api", (_req: Request, res: Response) => {
   res.json({
     ok: true,
     service: "audiobook-organizer-api",
-    endpoints: ["/health", "/scan", "/organize", "/manual-review/apply", "/metadata/search"],
+    endpoints: ["/api", "/health", "/scan", "/organize", "/manual-review/apply", "/metadata/search"],
   });
 });
 

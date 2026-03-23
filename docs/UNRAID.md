@@ -23,16 +23,17 @@ Notes:
 Import the provided `docker/unraid/unraid-template.xml` into Community Applications (Advanced → Import Template) or use it as reference to create a new container via the UI.
 
 Template improvements included:
-- Uses fixed image tag `nickhighland/audiobookrenamer:0.1.1` (you can change to `:latest` later if you prefer).
+- Uses fixed image tag `nickhighland/audiobookrenamer:0.1.2` (you can change to `:latest` later if you prefer).
 - Sets correct default WebUI/API port (`4033`).
 - Marks `OPENAI_API_KEY` as required and masked.
 - Includes advanced environment options: `GOOGLE_BOOKS_API_KEY`, `PORT`, `NODE_ENV`, `TZ`.
 - Includes project/support metadata for easier maintenance.
 
 Key settings to configure in the Unraid UI:
-- Repository: `nickhighland/audiobookrenamer:0.1.1` (recommended) or `nickhighland/audiobookrenamer:latest`
+- Repository: `nickhighland/audiobookrenamer:0.1.2` (recommended) or `nickhighland/audiobookrenamer:latest`
 - Network Type: `bridge` (or host if you prefer)
 - Host Ports: map host `4033` → container `4033` (or keep container `4033` and use another host port)
+- WebUI: use `http://[IP]:[PORT:4033]/` for the browser frontend (`/health` remains available for health checks)
 - Volumes: map an AppData path (e.g., `/mnt/user/appdata/audiobookrenamer` → `/app/data`) and your audiobooks share (e.g., `/mnt/user/media/audiobooks` → `/audiobooks`)
 - Environment Variables: set `OPENAI_API_KEY`, optionally `GOOGLE_BOOKS_API_KEY` and any provider keys you use.
 

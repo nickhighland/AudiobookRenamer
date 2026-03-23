@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <Container version="2">
   <Name>AudiobookRenamer</Name>
-  <Repository>nickhighland/audiobookrenamer:0.1.1</Repository>
+  <Repository>nickhighland/audiobookrenamer:0.1.2</Repository>
   <Registry>https://hub.docker.com/r/nickhighland/audiobookrenamer</Registry>
   <Network>bridge</Network>
   <MyIP/>
@@ -11,7 +11,7 @@
   <Project>https://github.com/nickhighland/AudiobookRenamer</Project>
   <Overview>Organize and rename audiobook files using metadata providers and AI identification.</Overview>
   <Category>Tools:</Category>
-  <WebUI>http://[IP]:[PORT:4033]/health</WebUI>
+  <WebUI>http://[IP]:[PORT:4033]/</WebUI>
   <ExtraParams/>
   <PostArgs/>
   <CPUset/>
