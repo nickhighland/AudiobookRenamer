@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Audiobook Namer & Organizer</title>
+    <style>
+      :root {
+        --bg: #f4f0e8;
+        --card: #fffaf2;
+        --text: #1f2328;
+        --accent: #ad4f1a;
+        --accent-soft: #e8c4ad;
+        --border: #d8c6b7;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Avenir Next", "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top right, #fcead9, var(--bg));
+        color: var(--text);
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+      }
+
+      .panel {
+        width: min(900px, 100%);
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 18px;
+        box-shadow: 0 12px 34px rgba(55, 31, 17, 0.12);
+        animation: rise 300ms ease-out;
+      }
+
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: clamp(20px, 2.5vw, 32px);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 10px;
+      }
+
+      .review-list {
+        margin-top: 10px;
+        display: grid;
+        gap: 8px;
+        max-height: 280px;
+        overflow: auto;
+      }
+
+      .review-item {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px;
+        background: #fff7ee;
+      }
+
+      .review-item small {
+        display: block;
+        color: #5c5047;
+        margin-bottom: 6px;
+        word-break: break-all;
+      }
+
+      .review-search {
+        margin-top: 8px;
+        display: grid;
+        grid-template-columns: 1fr 180px 120px;
+        gap: 6px;
+      }
+
+      label {
+        display: flex;
+        flex-direction: column;
+        font-size: 13px;
+        gap: 6px;
+      }
+
+      input,
+      select,
+      button,
+      textarea {
+        padding: 10px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        font: inherit;
+      }
+
+      button {
+        margin-top: 10px;
+        background: var(--accent);
+        color: white;
+        border: none;
+        cursor: pointer;
+      }
+
+      button:hover {
+        filter: brightness(1.05);
+      }
+
+      pre {
+        margin-top: 12px;
+        background: #faf6ef;
+        border: 1px solid var(--border);
+        padding: 10px;
+        border-radius: 10px;
+        min-height: 160px;
+        overflow: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="panel">
+      <h1>Audiobook Namer & Organizer</h1>
+      <div class="grid">
+        <label>
+          Input Folder
+          <input id="inputDir" placeholder="/path/to/raw/audiobooks" />
+        </label>
+        <label>
+          Output Folder
+          <input id="outputDir" placeholder="/path/to/organized" />
+        </label>
+        <label>
+          OpenAI API Key
+          <input id="apiKey" type="password" placeholder="sk-..." />
+        </label>
+        <label>
+          Naming Template
+          <input id="template" value="{part} - {title} - {author}{ext}" />
+        </label>
+      </div>
+      <div class="grid" style="margin-top: 8px">
+        <label>
+          Metadata Provider Priority
+          <select id="provider">
+            <option value="librivox,openlibrary">LibriVox then OpenLibrary (free audiobook-first)</option>
+            <option value="librivox,googlebooks">LibriVox then Google Books</option>
+            <option value="openlibrary,googlebooks">OpenLibrary then Google Books</option>
+          </select>
+        </label>
+        <label>
+          OpenAI Model
+          <input id="model" value="gpt-4.1-mini" />
+        </label>
+        <label>
+          Dry Run
+          <select id="dryRun">
+            <option value="true">true</option>
+            <option value="false">false</option>
+          </select>
+        </label>
+        <label>
+          Conflict Policy
+          <select id="conflictPolicy">
+            <option value="manual_review">manual_review (recommended)</option>
+            <option value="skip">skip</option>
+            <option value="rename">rename</option>
+            <option value="merge">merge</option>
+          </select>
+        </label>
+        <label>
+          Manual Review Folder (optional)
+          <input id="manualReviewDir" placeholder="/path/to/manual-review" />
+        </label>
+      </div>
+      <button id="scanBtn">Scan</button>
+      <button id="organizeBtn">Organize</button>
+      <p style="font-size: 12px; margin: 8px 0 0; color: #5c5047">
+        Manual review flow: choose manual_review policy, run organize, then open the generated JSON file to approve/resolve flagged conflicts.
+      </p>
+
+      <h2 style="font-size: 18px; margin: 14px 0 8px">Manual Review</h2>
+      <div class="grid">
+        <label>
+          Review JSON Path
+          <input id="reviewPath" placeholder="/path/to/manual-review-*.json" />
+        </label>
+        <label>
+          Apply Mode
+          <select id="reviewApplyDryRun">
+            <option value="true">dry run</option>
+            <option value="false">apply changes</option>
+          </select>
+        </label>
+      </div>
+      <button id="loadReviewBtn">Load Review File</button>
+      <button id="applyReviewBtn">Apply Decisions</button>
+      <div id="reviewList" class="review-list"></div>
+
+      <pre id="output">Ready.</pre>
+    </div>
+
+    <script>
+      /** @type {Array<{ source: string; proposedDestination: string; reason: string; metadata?: unknown }>} */
+      let loadedReviewItems = [];
+      /** @type {Record<number, Array<{ provider: string; metadata: any }>>} */
+      let searchResultsByIndex = {};
+      /** @type {Record<number, any>} */
+      let selectedMetadataByIndex = {};
+
+      const output = document.getElementById("output");
+      const inputDir = document.getElementById("inputDir");
+      const outputDir = document.getElementById("outputDir");
+      const apiKey = document.getElementById("apiKey");
+      const template = document.getElementById("template");
+      const provider = document.getElementById("provider");
+      const model = document.getElementById("model");
+      const dryRun = document.getElementById("dryRun");
+      const conflictPolicy = document.getElementById("conflictPolicy");
+      const manualReviewDir = document.getElementById("manualReviewDir");
+      const scanBtn = document.getElementById("scanBtn");
+      const organizeBtn = document.getElementById("organizeBtn");
+      const reviewPath = document.getElementById("reviewPath");
+      const reviewApplyDryRun = document.getElementById("reviewApplyDryRun");
+      const loadReviewBtn = document.getElementById("loadReviewBtn");
+      const applyReviewBtn = document.getElementById("applyReviewBtn");
+      const reviewList = document.getElementById("reviewList");
+
+      function renderReviewItems(items) {
+        reviewList.innerHTML = "";
+        searchResultsByIndex = {};
+        selectedMetadataByIndex = {};
+        if (!items.length) {
+          reviewList.textContent = "No manual review items loaded.";
+          return;
+        }
+
+        items.forEach((item, index) => {
+          const wrap = document.createElement("div");
+          wrap.className = "review-item";
+          wrap.innerHTML = `
+            <small><strong>Source:</strong> ${item.source}</small>
+            <small><strong>Proposed:</strong> ${item.proposedDestination}</small>
+            <small><strong>Reason:</strong> ${item.reason}</small>
+            <label>
+              Decision
+              <select data-index="${index}" data-kind="action">
+                <option value="approve">approve</option>
+                <option value="skip">skip</option>
+                <option value="custom_destination">custom_destination</option>
+              </select>
+            </label>
+            <label>
+              Custom Destination (if custom_destination)
+              <input data-index="${index}" data-kind="destination" placeholder="${item.proposedDestination}" />
+            </label>
+            <div class="review-search">
+              <input data-index="${index}" data-kind="searchQuery" placeholder="Search correct match (title + author)" value="${item.metadata?.title ?? ""}" />
+              <select data-index="${index}" data-kind="searchProviders">
+                <option value="librivox,openlibrary">librivox + openlibrary</option>
+                <option value="librivox,googlebooks">librivox + googlebooks</option>
+                <option value="openlibrary,googlebooks">openlibrary + googlebooks</option>
+              </select>
+              <button type="button" data-index="${index}" data-kind="searchBtn">Find Match</button>
+            </div>
+            <label>
+              Search Results
+              <select data-index="${index}" data-kind="searchResults">
+                <option value="">No override selected (keep original)</option>
+              </select>
+            </label>
+          `;
+          reviewList.appendChild(wrap);
+        });
+      }
+
+      function collectDecisions() {
+        return loadedReviewItems.map((item, index) => {
+          const actionEl = reviewList.querySelector(`select[data-index="${index}"][data-kind="action"]`);
+          const destinationEl = reviewList.querySelector(`input[data-index="${index}"][data-kind="destination"]`);
+          const action = actionEl ? actionEl.value : "skip";
+          const destination = destinationEl ? destinationEl.value.trim() : "";
+
+          return {
+            source: item.source,
+            action,
+            destination: action === "custom_destination" ? destination : undefined,
+            metadataOverride: selectedMetadataByIndex[index] || undefined,
+          };
+        });
+      }
+
+      function hydrateResultsSelect(index) {
+        const resultsSelect = reviewList.querySelector(`select[data-index="${index}"][data-kind="searchResults"]`);
+        if (!resultsSelect) {
+          return;
+        }
+
+        const results = searchResultsByIndex[index] || [];
+        resultsSelect.innerHTML = `<option value="">No override selected (keep original)</option>`;
+
+        results.forEach((result, resultIndex) => {
+          const option = document.createElement("option");
+          const author = Array.isArray(result.metadata?.authors) ? result.metadata.authors.join(", ") : "Unknown";
+          option.value = String(resultIndex);
+          option.textContent = `${result.provider}: ${result.metadata?.title ?? "Unknown Title"} - ${author}`;
+          resultsSelect.appendChild(option);
+        });
+
+        resultsSelect.addEventListener("change", () => {
+          if (resultsSelect.value === "") {
+            delete selectedMetadataByIndex[index];
+            return;
+          }
+          const selected = results[Number(resultsSelect.value)];
+          if (selected?.metadata) {
+            selectedMetadataByIndex[index] = selected.metadata;
+          }
+        });
+      }
+
+      scanBtn.addEventListener("click", async () => {
+        output.textContent = "Scanning...";
+        try {
+          const result = await window.organizerApi.scan(inputDir.value, true);
+          output.textContent = JSON.stringify(result, null, 2);
+        } catch (error) {
+          output.textContent = String(error);
+        }
+      });
+
+      organizeBtn.addEventListener("click", async () => {
+        output.textContent = "Organizing...";
+        try {
+          const order = provider.value.split(",");
+          const result = await window.organizerApi.organize(
+            {
+              inputDir: inputDir.value,
+              outputDir: outputDir.value,
+              metadataProviderOrder: order,
+              namingTemplate: template.value,
+              openAiModel: model.value,
+              dryRun: dryRun.value === "true",
+              conflictPolicy: conflictPolicy.value,
+              manualReviewDir: manualReviewDir.value || undefined,
+              recursive: true,
+              createBookFolder: true,
+            },
+            apiKey.value,
+          );
+          output.textContent = JSON.stringify(result, null, 2);
+        } catch (error) {
+          output.textContent = String(error);
+        }
+      });
+
+      loadReviewBtn.addEventListener("click", async () => {
+        output.textContent = "Loading manual review file...";
+        try {
+          const doc = await window.organizerApi.loadManualReview(reviewPath.value);
+          loadedReviewItems = Array.isArray(doc.items) ? doc.items : [];
+          renderReviewItems(loadedReviewItems);
+          output.textContent = JSON.stringify({ loaded: loadedReviewItems.length }, null, 2);
+        } catch (error) {
+          output.textContent = String(error);
+        }
+      });
+
+      applyReviewBtn.addEventListener("click", async () => {
+        output.textContent = "Applying manual review decisions...";
+        try {
+          const decisions = collectDecisions();
+          const result = await window.organizerApi.applyManualReview(
+            reviewPath.value,
+            decisions,
+            reviewApplyDryRun.value === "true",
+          );
+          output.textContent = JSON.stringify(result, null, 2);
+        } catch (error) {
+          output.textContent = String(error);
+        }
+      });
+
+      reviewList.addEventListener("click", async (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) {
+          return;
+        }
+
+        if (target.dataset.kind !== "searchBtn") {
+          return;
+        }
+
+        const index = Number(target.dataset.index);
+        const queryEl = reviewList.querySelector(`input[data-index="${index}"][data-kind="searchQuery"]`);
+        const providersEl = reviewList.querySelector(`select[data-index="${index}"][data-kind="searchProviders"]`);
+        if (!queryEl || !providersEl) {
+          return;
+        }
+
+        output.textContent = `Searching metadata for review item ${index + 1}...`;
+        try {
+          const query = queryEl.value.trim();
+          const providers = providersEl.value.split(",");
+          const result = await window.organizerApi.searchMetadata(query, providers);
+          const normalized = Array.isArray(result.results) ? result.results : [];
+          searchResultsByIndex[index] = normalized;
+          hydrateResultsSelect(index);
+          output.textContent = JSON.stringify({ item: index + 1, resultCount: normalized.length }, null, 2);
+        } catch (error) {
+          output.textContent = String(error);
+        }
+      });
+    </script>
+  </body>
+</html>

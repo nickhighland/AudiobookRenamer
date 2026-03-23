@@ -1,0 +1,30 @@
+{
+  "name": "audiobook-namer-and-organizer",
+  "version": "0.1.0",
+  "description": "Cross-platform audiobook organizer with OpenAI-powered identification and metadata export",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev:api": "npm run dev -w @aon/api",
+    "dev:desktop": "npm run dev -w @aon/desktop",
+    "dist:desktop": "npm run dist -w @aon/desktop",
+    "dist:desktop:mac": "npm run dist:mac -w @aon/desktop",
+    "dist:desktop:win": "npm run dist:win -w @aon/desktop",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "keywords": [
+    "audiobook",
+    "audiobookshelf",
+    "openai",
+    "electron"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.8.2"
+  }
+}

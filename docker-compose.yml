@@ -1,0 +1,13 @@
+services:
+  audiobook-organizer-api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "4033:4033"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PORT=4033
+    volumes:
+      - ./data/input:/data/input
+      - ./data/output:/data/output
