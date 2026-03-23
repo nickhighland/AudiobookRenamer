@@ -28,6 +28,10 @@ export class OpenAiIdentifier {
       "Infer audiobook identity details from poor filename data.",
       "Return strict JSON with keys: title, authors, part, chapter, series, volumeNumber, confidence, notes.",
       "Do not hallucinate if unknown; prefer conservative values and confidence.",
+      "Important extraction rules:",
+      "- In patterns like 'Author - Title 2 of 9', author is left side, title is right side without '2 of 9'.",
+      "- If text contains 'N of M', set part to N.",
+      "- If a guessed field looks obviously wrong (e.g. guessedAuthor contains 'of'), correct it.",
       `relativePath: ${candidate.relativePath}`,
       `fileName: ${candidate.fileName}`,
       `guessedTitle: ${candidate.guessedTitle ?? ""}`,
@@ -40,7 +44,7 @@ export class OpenAiIdentifier {
       {
         role: "system" as const,
         content:
-          "You normalize bad audiobook file names. Extract only what can be inferred from text. Confidence must be 0..1.",
+          "You normalize bad audiobook file names. Extract only what can be inferred from text. Confidence must be 0..1. Prefer correcting obvious author/title swaps.",
       },
       {
         role: "user" as const,

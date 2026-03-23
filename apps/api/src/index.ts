@@ -27,6 +27,7 @@ if (existsSync(publicDir)) {
 const organizeSchema = z.object({
   inputDir: z.string().min(1),
   outputDir: z.string().min(1),
+  fileOperation: z.enum(["move", "copy"]).optional(),
   recursive: z.boolean().optional(),
   dryRun: z.boolean().optional(),
   overwrite: z.boolean().optional(),
@@ -155,6 +156,7 @@ app.post("/organize", async (req: Request, res: Response) => {
       {
         inputDir: parsed.inputDir,
         outputDir: parsed.outputDir,
+        fileOperation: parsed.fileOperation,
         recursive: parsed.recursive,
         dryRun: parsed.dryRun,
         overwrite: parsed.overwrite,
@@ -208,6 +210,7 @@ app.post("/organize/stream", async (req: Request, res: Response) => {
       {
         inputDir: parsed.inputDir,
         outputDir: parsed.outputDir,
+        fileOperation: parsed.fileOperation,
         recursive: parsed.recursive,
         dryRun: parsed.dryRun,
         overwrite: parsed.overwrite,

@@ -5,6 +5,12 @@ const namingTemplateInput = $("namingTemplate");
 const folderTemplateInput = $("folderTemplate");
 const openAiModelSelect = $("openAiModel");
 const refreshModelsBtn = $("refreshModelsBtn");
+const saveSettingsBtn = $("saveSettingsBtn");
+const organizeBtn = $("organizeBtn");
+const runStatusEl = $("runStatus");
+
+const SETTINGS_KEY = "aon.web.settings.v1";
+
 let activeTemplateInput = namingTemplateInput;
 
 function setActiveTemplateInput(inputEl) {
@@ -43,6 +49,107 @@ function appendOutput(title, data) {
   outputEl.textContent = `[${stamp}] ${title}\n${payload}\n\n${outputEl.textContent}`;
 }
 
+function setRunStatus(text) {
+  runStatusEl.textContent = text;
+}
+
+function settingsSnapshot() {
+  return {
+    inputDir: $("inputDir").value,
+    outputDir: $("outputDir").value,
+    namingTemplate: $("namingTemplate").value,
+    folderTemplate: $("folderTemplate").value,
+    openAiModel: openAiModelSelect.value,
+    conflictPolicy: $("conflictPolicy").value,
+    highReliabilityThreshold: $("highReliabilityThreshold").value,
+    fileOperation: $("fileOperation").value,
+    recursive: $("recursive").checked,
+    createBookFolder: $("createBookFolder").checked,
+    embedCoverInAudio: $("embedCoverInAudio").checked,
+    embedMetadataInAudio: $("embedMetadataInAudio").checked,
+    dryRun: $("dryRun").checked,
+    overwrite: $("overwrite").checked,
+    providers: selectedProviders(),
+    googleBooksApiKey: $("googleBooksApiKey").value,
+    openAiApiKey: $("openAiApiKey").value,
+  };
+}
+
+function applySettings(settings) {
+  if (!settings || typeof settings !== "object") return;
+
+  const fields = [
+    "inputDir",
+    "outputDir",
+    "namingTemplate",
+    "folderTemplate",
+    "highReliabilityThreshold",
+    "googleBooksApiKey",
+    "openAiApiKey",
+  ];
+
+  for (const id of fields) {
+    if (typeof settings[id] === "string") {
+      $(id).value = settings[id];
+    }
+  }
+
+  if (typeof settings.openAiModel === "string" && settings.openAiModel) {
+    const option = Array.from(openAiModelSelect.options).find((o) => o.value === settings.openAiModel);
+    if (!option) {
+      const dynamic = document.createElement("option");
+      dynamic.value = settings.openAiModel;
+      dynamic.textContent = settings.openAiModel;
+      openAiModelSelect.appendChild(dynamic);
+    }
+    openAiModelSelect.value = settings.openAiModel;
+  }
+
+  if (typeof settings.conflictPolicy === "string") {
+    $("conflictPolicy").value = settings.conflictPolicy;
+  }
+  if (typeof settings.fileOperation === "string") {
+    $("fileOperation").value = settings.fileOperation;
+  }
+
+  const checkFields = [
+    "recursive",
+    "createBookFolder",
+    "embedCoverInAudio",
+    "embedMetadataInAudio",
+    "dryRun",
+    "overwrite",
+  ];
+  for (const id of checkFields) {
+    if (typeof settings[id] === "boolean") {
+      $(id).checked = settings[id];
+    }
+  }
+
+  if (Array.isArray(settings.providers)) {
+    document.querySelectorAll(".provider").forEach((el) => {
+      el.checked = settings.providers.includes(el.value);
+    });
+  }
+}
+
+function saveSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsSnapshot()));
+  appendOutput("Settings", "Saved settings to browser storage.");
+}
+
+function loadSettings() {
+  const raw = localStorage.getItem(SETTINGS_KEY);
+  if (!raw) return;
+  try {
+    const parsed = JSON.parse(raw);
+    applySettings(parsed);
+    appendOutput("Settings", "Loaded saved settings.");
+  } catch {
+    appendOutput("Settings", "Saved settings were invalid and were ignored.");
+  }
+}
+
 async function postJson(path, body) {
   const response = await fetch(path, {
     method: "POST",
@@ -67,6 +174,7 @@ function buildBasePayload() {
   return {
     inputDir: $("inputDir").value.trim(),
     outputDir: $("outputDir").value.trim(),
+    fileOperation: $("fileOperation").value || "move",
     recursive: $("recursive").checked,
     dryRun: $("dryRun").checked,
     overwrite: $("overwrite").checked,
@@ -82,6 +190,58 @@ function buildBasePayload() {
     embedCoverInAudio: $("embedCoverInAudio").checked,
     embedMetadataInAudio: $("embedMetadataInAudio").checked,
   };
+}
+
+async function organizeWithRealtime(payload) {
+  const response = await fetch("/organize/stream", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok || !response.body) {
+    const fallback = await postJson("/organize", payload);
+    appendOutput("Organize Result", fallback);
+    return;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let newlineIndex = buffer.indexOf("\n");
+    while (newlineIndex >= 0) {
+      const line = buffer.slice(0, newlineIndex).trim();
+      buffer = buffer.slice(newlineIndex + 1);
+
+      if (line) {
+        try {
+          const event = JSON.parse(line);
+          if (event.type === "result") {
+            appendOutput("Organize Result", event.result);
+            setRunStatus("Completed.");
+          } else if (event.type === "error") {
+            appendOutput("Organize Error", event.message ?? event);
+            setRunStatus("Error.");
+          } else {
+            const progress = event.total && event.index ? `(${event.index}/${event.total}) ` : "";
+            const message = event.message || JSON.stringify(event);
+            appendOutput("Organize Progress", `${progress}${message}`);
+            setRunStatus(`${progress}${message}`);
+          }
+        } catch {
+          appendOutput("Organize Stream", line);
+        }
+      }
+
+      newlineIndex = buffer.indexOf("\n");
+    }
+  }
 }
 
 function setModelOptions(models) {
@@ -155,7 +315,7 @@ $("scanBtn").addEventListener("click", async () => {
   }
 });
 
-$("organizeBtn").addEventListener("click", async () => {
+organizeBtn.addEventListener("click", async () => {
   try {
     const payload = buildBasePayload();
     if (!payload.inputDir || !payload.outputDir) {
@@ -163,10 +323,17 @@ $("organizeBtn").addEventListener("click", async () => {
       return;
     }
 
-    const result = await postJson("/organize", payload);
-    appendOutput("Organize Result", result);
+    organizeBtn.disabled = true;
+    organizeBtn.textContent = "Running...";
+    setRunStatus("Starting organizer...");
+    saveSettings();
+    await organizeWithRealtime(payload);
   } catch (error) {
     appendOutput("Organize Error", String(error));
+    setRunStatus("Error.");
+  } finally {
+    organizeBtn.disabled = false;
+    organizeBtn.textContent = "Run Organize";
   }
 });
 
@@ -196,10 +363,15 @@ refreshModelsBtn.addEventListener("click", () => {
   loadOpenAiModels();
 });
 
+saveSettingsBtn.addEventListener("click", () => {
+  saveSettings();
+});
+
 fetch("/api")
   .then((res) => res.json())
   .then((info) => {
     appendOutput("Service", info);
+    loadSettings();
     return loadOpenAiModels();
   })
   .catch(() => appendOutput("Service", "Unable to load /api status"));

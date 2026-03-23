@@ -7,6 +7,45 @@ import { NameTemplateContext } from "./types.js";
 
 const TOKEN_REGEX = /\{([a-zA-Z0-9_]+)\}/g;
 
+const TRIM_SEPARATOR_REGEX = /^\s*[-_.|:]+\s*|\s*[-_.|:]+\s*$/g;
+
+function normalizeExt(value: string): string {
+  if (!value) return value;
+  return value.startsWith(".") ? value : `.${value}`;
+}
+
+function tokenValue(ctx: NameTemplateContext, token: keyof NameTemplateContext): string {
+  const raw = ctx[token] ?? "";
+  if (token === "ext") {
+    return normalizeExt(String(raw));
+  }
+  return String(raw);
+}
+
+function renderSegmentWithOptionalSeparators(segment: string, ctx: NameTemplateContext): string {
+  let rendered = segment;
+
+  const tokens = [...segment.matchAll(TOKEN_REGEX)].map((m) => m[1] as keyof NameTemplateContext);
+
+  for (const token of tokens) {
+    const placeholder = `{${token}}`;
+    const escaped = placeholder.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const value = tokenValue(ctx, token);
+
+    if (!value) {
+      // Remove adjacent separators if this optional token is empty.
+      rendered = rendered.replace(new RegExp(`\\s*[-_.|:]+\\s*${escaped}`, "g"), " ");
+      rendered = rendered.replace(new RegExp(`${escaped}\\s*[-_.|:]+\\s*`, "g"), " ");
+      rendered = rendered.replace(new RegExp(escaped, "g"), "");
+      continue;
+    }
+
+    rendered = rendered.replace(new RegExp(escaped, "g"), value);
+  }
+
+  return rendered.replace(TRIM_SEPARATOR_REGEX, "").replace(/\s{2,}/g, " ").trim();
+}
+
 function sanitizeSegment(segment: string): string {
   return sanitize(segment).trim() || "Unknown";
 }
@@ -16,10 +55,10 @@ function sanitizeSegmentAllowEmpty(segment: string): string {
 }
 
 export function renderTemplate(template: string, ctx: NameTemplateContext): string {
-  return template.replace(TOKEN_REGEX, (_, token: keyof NameTemplateContext) => {
-    const value = ctx[token] ?? "";
-    return String(value);
-  });
+  return template
+    .split("/")
+    .map((segment) => renderSegmentWithOptionalSeparators(segment, ctx))
+    .join("/");
 }
 
 export function buildOutputRelativePath(

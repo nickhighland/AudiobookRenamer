@@ -71,7 +71,8 @@
             <button type="button" class="token-btn" data-token="{ext}">{ext}</button>
           </div>
           <p class="hint">Use placeholders in Naming Template and Folder Template. Empty values are automatically skipped in folder segments.</p>
-          <p class="hint">Example naming: {author} - {title} - Part {part}{ext}</p>
+          <p class="hint">`{part}` resolves to number-only (for example `1`, not `Part 1`).</p>
+          <p class="hint">Example naming: {author} - {title} - {part}{ext}</p>
           <p class="hint">Example folder: {author}/{series}/{title}</p>
         </div>
 
@@ -89,6 +90,13 @@
           <label>
             Reliability Threshold
             <input id="highReliabilityThreshold" type="number" min="0" max="1" step="0.05" value="0.8" />
+          </label>
+          <label>
+            File Operation
+            <select id="fileOperation">
+              <option value="move" selected>move (delete source after success)</option>
+              <option value="copy">copy (keep source file)</option>
+            </select>
           </label>
           <label>
             OpenAI API Key (optional if env set)
@@ -118,8 +126,10 @@
 
         <div class="actions">
           <button id="scanBtn" class="secondary">Scan</button>
+          <button id="saveSettingsBtn" class="secondary">Save Settings</button>
           <button id="organizeBtn" class="primary">Run Organize</button>
         </div>
+        <p id="runStatus" class="hint">Idle.</p>
       </section>
 
       <section class="card">

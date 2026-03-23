@@ -8,6 +8,7 @@ import { AudioFileCandidate } from "./types.js";
 
 const PART_REGEX = /(part|pt|disc|cd)\s*([0-9ivx]+)/i;
 const CHAPTER_REGEX = /(chapter|ch)\s*([0-9]+)/i;
+const OF_TOTAL_REGEX = /\b([0-9]+)\s*of\s*([0-9]+)\b/i;
 
 function toTitleCase(raw: string): string {
   return raw
@@ -20,18 +21,46 @@ function toTitleCase(raw: string): string {
 function guessFromFileName(fileName: string): Pick<AudioFileCandidate, "guessedAuthor" | "guessedTitle" | "guessedPart" | "guessedChapter"> {
   const base = fileName.replace(/\.[^.]+$/, "");
   const normalized = base.replace(/[._]/g, " ").replace(/\s+-\s+/g, " - ");
-  const [left, right] = normalized.split(" - ").map((s) => s.trim());
+  const parts = normalized.split(" - ").map((s) => s.trim()).filter(Boolean);
+  const left = parts[0];
+  const right = parts.length > 1 ? parts.slice(1).join(" - ") : "";
 
   const partMatch = normalized.match(PART_REGEX);
   const chapterMatch = normalized.match(CHAPTER_REGEX);
+  const ofTotalMatch = normalized.match(OF_TOTAL_REGEX);
 
-  const guessedAuthor = right ? toTitleCase(right) : undefined;
-  const guessedTitle = left ? toTitleCase(left) : toTitleCase(normalized);
+  // Common audiobook convention: "Author - Title 1 of 9"
+  // Treat left side as author and right side as title/details.
+  let guessedAuthor = left ? toTitleCase(left) : undefined;
+  let guessedTitle = right ? toTitleCase(right) : toTitleCase(normalized);
+  let guessedPart = partMatch ? String(partMatch[2]).toUpperCase() : undefined;
+
+  if (right) {
+    const rightOfTotal = right.match(OF_TOTAL_REGEX);
+    if (rightOfTotal) {
+      guessedPart = rightOfTotal[1];
+      guessedTitle = toTitleCase(right.replace(rightOfTotal[0], "").replace(/[-_]+$/g, "").trim());
+    }
+  }
+
+  // Single segment fallback, e.g. "The Bottoms 2 of 9 - Joe R Lansdale" or no separator.
+  if (!right && ofTotalMatch) {
+    guessedPart = ofTotalMatch[1];
+    guessedTitle = toTitleCase(normalized.replace(ofTotalMatch[0], "").trim());
+  }
+
+  if (guessedTitle && guessedAuthor && guessedTitle.toLowerCase() === guessedAuthor.toLowerCase()) {
+    guessedAuthor = undefined;
+  }
+
+  if (!guessedTitle) {
+    guessedTitle = toTitleCase(normalized);
+  }
 
   return {
     guessedAuthor,
     guessedTitle,
-    guessedPart: partMatch ? `Part ${partMatch[2].toUpperCase()}` : undefined,
+    guessedPart,
     guessedChapter: chapterMatch ? `Chapter ${chapterMatch[2]}` : undefined,
   };
 }

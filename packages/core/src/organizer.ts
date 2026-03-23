@@ -16,6 +16,23 @@ import {
   OrganizeResult,
 } from "./types.js";
 
+export interface OrganizeProgressEvent {
+  type:
+    | "started"
+    | "scan_complete"
+    | "item_started"
+    | "metadata_resolved"
+    | "item_completed"
+    | "warning"
+    | "complete";
+  index?: number;
+  total?: number;
+  source?: string;
+  destination?: string;
+  status?: "moved" | "skipped" | "manual_review";
+  message?: string;
+}
+
 async function moveFile(source: string, destination: string): Promise<void> {
   try {
     await fs.rename(source, destination);
@@ -23,6 +40,70 @@ async function moveFile(source: string, destination: string): Promise<void> {
     await fs.copyFile(source, destination);
     await fs.unlink(source);
   }
+}
+
+function romanToNumber(token: string): number | null {
+  const map: Record<string, number> = { i: 1, v: 5, x: 10, l: 50, c: 100, d: 500, m: 1000 };
+  const input = token.toLowerCase();
+  let total = 0;
+  let prev = 0;
+  for (let i = input.length - 1; i >= 0; i -= 1) {
+    const value = map[input[i]];
+    if (!value) return null;
+    if (value < prev) total -= value;
+    else total += value;
+    prev = value;
+  }
+  return total > 0 ? total : null;
+}
+
+function normalizeNumericToken(value?: string): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  const digitMatch = trimmed.match(/\d+(?:\.\d+)?/);
+  if (digitMatch) {
+    return digitMatch[0];
+  }
+
+  const romanMatch = trimmed.match(/\b[ivxlcdm]+\b/i);
+  if (romanMatch) {
+    const romanValue = romanToNumber(romanMatch[0]);
+    if (romanValue != null) {
+      return String(romanValue);
+    }
+  }
+
+  const words: Record<string, number> = {
+    one: 1,
+    two: 2,
+    three: 3,
+    four: 4,
+    five: 5,
+    six: 6,
+    seven: 7,
+    eight: 8,
+    nine: 9,
+    ten: 10,
+    eleven: 11,
+    twelve: 12,
+    thirteen: 13,
+    fourteen: 14,
+    fifteen: 15,
+    sixteen: 16,
+    seventeen: 17,
+    eighteen: 18,
+    nineteen: 19,
+    twenty: 20,
+  };
+
+  const wordMatch = trimmed.toLowerCase().match(/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\b/);
+  if (wordMatch) {
+    return String(words[wordMatch[1]]);
+  }
+
+  return undefined;
 }
 
 async function pathExists(targetPath: string): Promise<boolean> {
@@ -82,7 +163,7 @@ function templateContextFrom(metadata: BookMetadata, extension: string, part?: s
   return {
     author: metadata.authors[0] ?? "Unknown Author",
     title: metadata.title,
-    part,
+    part: normalizeNumericToken(part),
     chapter,
     series: metadata.series,
     seriesNumber: metadata.seriesSequence,
@@ -109,6 +190,7 @@ async function writeManualReviewFile(manualReviewDir: string, items: ManualRevie
 export async function organizeAudiobooks(
   config: OrganizerConfig,
   openAiApiKey: string,
+  onProgress?: (event: OrganizeProgressEvent) => void,
 ): Promise<OrganizeResult> {
   const warnings: string[] = [];
   const actions: OrganizeAction[] = [];
@@ -116,16 +198,26 @@ export async function organizeAudiobooks(
   const plannedDestinations = new Set<string>();
 
   const conflictPolicy = config.conflictPolicy ?? "manual_review";
+  const fileOperation = config.fileOperation ?? "move";
   const highReliabilityThreshold = config.highReliabilityThreshold ?? 0.88;
   const manualReviewDir = config.manualReviewDir ?? path.resolve(config.outputDir, "manual-review");
+  onProgress?.({ type: "started", message: "Scanning audiobook files..." });
   const candidates = await scanAudiobookFiles(config.inputDir, config.recursive ?? true);
+  onProgress?.({ type: "scan_complete", total: candidates.length, message: `Found ${candidates.length} audio files.` });
 
   const identifier = new OpenAiIdentifier(openAiApiKey, config.openAiModel);
   const providers = createProviders(config.metadataProviderOrder, {
     googleBooksApiKey: config.providerApiKeys?.googleBooksApiKey,
   });
 
-  for (const candidate of candidates) {
+  for (const [idx, candidate] of candidates.entries()) {
+    onProgress?.({
+      type: "item_started",
+      index: idx + 1,
+      total: candidates.length,
+      source: candidate.relativePath,
+      message: `Identifying ${candidate.relativePath}`,
+    });
     const identity = await identifier.identify(candidate);
     let metadata: BookMetadata = {
       title: identity.title,
@@ -145,8 +237,23 @@ export async function organizeAudiobooks(
         }
       } catch {
         warnings.push(`Metadata lookup failed for provider ${provider.name} on ${candidate.relativePath}`);
+        onProgress?.({
+          type: "warning",
+          index: idx + 1,
+          total: candidates.length,
+          source: candidate.relativePath,
+          message: `Metadata lookup failed: ${provider.name}`,
+        });
       }
     }
+
+    onProgress?.({
+      type: "metadata_resolved",
+      index: idx + 1,
+      total: candidates.length,
+      source: candidate.relativePath,
+      message: `Metadata selected for ${candidate.relativePath}`,
+    });
 
     const ctx = templateContextFrom(metadata, candidate.extension, identity.part, identity.chapter);
     const folderTemplate = config.createBookFolder === false
@@ -174,6 +281,15 @@ export async function organizeAudiobooks(
           reason,
         });
         warnings.push(`${reason} Skipped ${candidate.relativePath}`);
+        onProgress?.({
+          type: "item_completed",
+          index: idx + 1,
+          total: candidates.length,
+          source: candidate.relativePath,
+          destination,
+          status: "skipped",
+          message: reason,
+        });
         continue;
       }
 
@@ -190,6 +306,15 @@ export async function organizeAudiobooks(
           proposedDestination: destination,
           reason,
           metadata,
+        });
+        onProgress?.({
+          type: "item_completed",
+          index: idx + 1,
+          total: candidates.length,
+          source: candidate.relativePath,
+          destination,
+          status: "manual_review",
+          message: reason,
         });
         continue;
       }
@@ -211,6 +336,15 @@ export async function organizeAudiobooks(
             proposedDestination: destination,
             reason: `${reason} Low confidence match requires review.`,
             metadata,
+          });
+          onProgress?.({
+            type: "item_completed",
+            index: idx + 1,
+            total: candidates.length,
+            source: candidate.relativePath,
+            destination,
+            status: "manual_review",
+            message: `Low confidence (${identity.confidence.toFixed(2)}). Sent to manual review.`,
           });
           continue;
         }
@@ -236,29 +370,74 @@ export async function organizeAudiobooks(
     });
 
     if (config.dryRun) {
+      onProgress?.({
+        type: "item_completed",
+        index: idx + 1,
+        total: candidates.length,
+        source: candidate.relativePath,
+        destination,
+        status: "moved",
+        message: `Dry run: planned ${fileOperation} action recorded.`,
+      });
       continue;
     }
 
     await fs.mkdir(path.dirname(destination), { recursive: true });
-    await moveFile(candidate.absolutePath, destination);
 
-    const bookFolder = path.dirname(destination);
-    const metadataPath = await writeAudiobookshelfMetadata(bookFolder, metadata);
-    const coverPath = await writeCoverImage(bookFolder, metadata);
-    if (config.embedCoverInAudio && coverPath) {
-      await embedCoverInAudioIfPossible(destination, coverPath);
-    }
-    if (config.embedMetadataInAudio !== false) {
-      await embedMetadataInAudioIfPossible(destination, metadata);
+    const tempDestination = path.join(
+      path.dirname(destination),
+      `${path.basename(destination)}.processing-${Date.now()}-${idx + 1}`,
+    );
+
+    let metadataPath: string | undefined;
+    try {
+      // Work on a temporary output copy and only finalize to destination when all processing succeeds.
+      await fs.copyFile(candidate.absolutePath, tempDestination);
+
+      const bookFolder = path.dirname(tempDestination);
+      metadataPath = await writeAudiobookshelfMetadata(bookFolder, metadata);
+      const coverPath = await writeCoverImage(bookFolder, metadata);
+      if (config.embedCoverInAudio && coverPath) {
+        await embedCoverInAudioIfPossible(tempDestination, coverPath);
+      }
+      if (config.embedMetadataInAudio !== false) {
+        await embedMetadataInAudioIfPossible(tempDestination, metadata);
+      }
+
+      await moveFile(tempDestination, destination);
+
+      if (fileOperation === "move") {
+        await fs.unlink(candidate.absolutePath);
+      }
+    } catch (error) {
+      if (await pathExists(tempDestination)) {
+        await fs.unlink(tempDestination);
+      }
+      throw error;
     }
 
     actions[actions.length - 1].metadataPath = metadataPath;
+    onProgress?.({
+      type: "item_completed",
+      index: idx + 1,
+      total: candidates.length,
+      source: candidate.relativePath,
+      destination,
+      status: "moved",
+      message: `${fileOperation === "copy" ? "Copied" : "Moved"} and wrote metadata for ${candidate.relativePath}`,
+    });
   }
 
   let manualReviewPath: string | undefined;
   if (manualReviewItems.length > 0) {
     manualReviewPath = await writeManualReviewFile(manualReviewDir, manualReviewItems);
   }
+
+  onProgress?.({
+    type: "complete",
+    total: candidates.length,
+    message: `Completed. ${actions.length} actions, ${warnings.length} warnings, ${manualReviewItems.length} manual review item(s).`,
+  });
 
   return { actions, warnings, manualReviewPath, manualReviewCount: manualReviewItems.length };
 }

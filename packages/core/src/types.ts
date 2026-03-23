@@ -70,6 +70,7 @@ export interface NameTemplateContext {
 export interface OrganizerConfig {
   inputDir: string;
   outputDir: string;
+  fileOperation?: "move" | "copy";
   recursive?: boolean;
   dryRun?: boolean;
   overwrite?: boolean;

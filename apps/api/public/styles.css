@@ -146,6 +146,12 @@ h2 {
   font-size: 0.82rem;
 }
 
+#runStatus {
+  margin-top: 10px;
+  color: #b7ffda;
+  font-family: var(--mono);
+}
+
 label {
   display: flex;
   flex-direction: column;
