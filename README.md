@@ -153,6 +153,9 @@ Mounted folders:
 
 - `dryRun: true` is recommended for first pass.
 - Free audiobook metadata default is LibriVox (`librivox`), which is audiobook-specific and does not require paid credentials.
+- File metadata embedding is enabled by default (`embedMetadataInAudio: true`) and writes title, author, description/comment, publisher, date/year, language, genre, and ISBN tags when supported by the audio container.
+- Cover embedding is optional (`embedCoverInAudio: true`) and requires ffmpeg.
+- For in-file tag and cover embedding, ffmpeg must be installed and available in PATH.
 - Conflict handling policies:
   - `manual_review`: write conflicts to a JSON review file and do not move those files.
   - `skip`: ignore conflicts.

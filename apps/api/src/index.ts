@@ -20,17 +20,28 @@ const organizeSchema = z.object({
   dryRun: z.boolean().optional(),
   overwrite: z.boolean().optional(),
   metadataProviderOrder: z.array(z.enum(["librivox", "openlibrary", "googlebooks"])).default(["librivox", "openlibrary"]),
+  providerApiKeys: z
+    .object({
+      googleBooksApiKey: z.string().optional(),
+    })
+    .optional(),
   openAiModel: z.string().optional(),
+  folderTemplate: z.string().optional(),
   namingTemplate: z.string().optional(),
   createBookFolder: z.boolean().optional(),
-  conflictPolicy: z.enum(["skip", "rename", "merge", "manual_review"]).optional(),
+  conflictPolicy: z.enum(["skip", "rename", "merge", "manual_review", "rename_if_high_reliability"]).optional(),
+  highReliabilityThreshold: z.number().min(0).max(1).optional(),
   manualReviewDir: z.string().optional(),
+  embedCoverInAudio: z.boolean().optional(),
+  embedMetadataInAudio: z.boolean().optional(),
   openAiApiKey: z.string().optional(),
 });
 
 const applyManualReviewSchema = z.object({
   reviewFilePath: z.string().min(1),
   dryRun: z.boolean().optional(),
+  embedCoverInAudio: z.boolean().optional(),
+  embedMetadataInAudio: z.boolean().optional(),
   decisions: z.array(
     z.object({
       source: z.string().min(1),
@@ -97,11 +108,16 @@ app.post("/organize", async (req: Request, res: Response) => {
         dryRun: parsed.dryRun,
         overwrite: parsed.overwrite,
         metadataProviderOrder: parsed.metadataProviderOrder,
+        providerApiKeys: parsed.providerApiKeys,
         openAiModel: parsed.openAiModel,
+        folderTemplate: parsed.folderTemplate,
         namingTemplate: parsed.namingTemplate,
         createBookFolder: parsed.createBookFolder,
         conflictPolicy: parsed.conflictPolicy,
+        highReliabilityThreshold: parsed.highReliabilityThreshold,
         manualReviewDir: parsed.manualReviewDir,
+        embedCoverInAudio: parsed.embedCoverInAudio,
+        embedMetadataInAudio: parsed.embedMetadataInAudio,
       },
       openAiApiKey,
     );
@@ -119,7 +135,13 @@ app.post("/organize", async (req: Request, res: Response) => {
 app.post("/manual-review/apply", async (req: Request, res: Response) => {
   try {
     const parsed = applyManualReviewSchema.parse(req.body);
-    const result = await applyManualReview(parsed.reviewFilePath, parsed.decisions, parsed.dryRun ?? false);
+    const result = await applyManualReview(
+      parsed.reviewFilePath,
+      parsed.decisions,
+      parsed.dryRun ?? false,
+      parsed.embedCoverInAudio ?? false,
+      parsed.embedMetadataInAudio ?? true,
+    );
     return res.json(result);
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {

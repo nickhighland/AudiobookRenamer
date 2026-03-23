@@ -1,11 +1,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import axios from "axios";
-
 import { DEFAULT_BOOK_FOLDER_TEMPLATE, DEFAULT_NAMING_TEMPLATE } from "./defaults.js";
+import { embedCoverInAudioIfPossible, embedMetadataInAudioIfPossible, writeCoverImage } from "./cover.js";
 import { createProviders } from "./metadata/providers.js";
-import { buildOutputRelativePath, renderTemplate } from "./naming.js";
+import { buildFolderRelativePath, buildOutputRelativePath } from "./naming.js";
 import { OpenAiIdentifier } from "./openaiIdentifier.js";
 import { scanAudiobookFiles } from "./scanner.js";
 import {
@@ -66,7 +65,10 @@ async function writeAudiobookshelfMetadata(folder: string, metadata: BookMetadat
         ]
       : [],
     publishedYear: metadata.publishedYear,
+    publishedDate: metadata.publishedDate,
+    publisher: metadata.publisher,
     description: metadata.description,
+    genres: metadata.genres,
     language: metadata.language,
     isbn: metadata.isbn,
     asin: metadata.asin,
@@ -74,22 +76,6 @@ async function writeAudiobookshelfMetadata(folder: string, metadata: BookMetadat
 
   await fs.writeFile(outPath, JSON.stringify(absMetadata, null, 2), "utf-8");
   return outPath;
-}
-
-async function maybeDownloadCover(folder: string, coverUrl?: string): Promise<void> {
-  if (!coverUrl) {
-    return;
-  }
-
-  try {
-    const response = await axios.get<ArrayBuffer>(coverUrl, {
-      responseType: "arraybuffer",
-      timeout: 15000,
-    });
-    await fs.writeFile(path.join(folder, "cover.jpg"), Buffer.from(response.data));
-  } catch {
-    // Cover download failures should not block organization.
-  }
 }
 
 function templateContextFrom(metadata: BookMetadata, extension: string, part?: string, chapter?: string): NameTemplateContext {
@@ -130,11 +116,14 @@ export async function organizeAudiobooks(
   const plannedDestinations = new Set<string>();
 
   const conflictPolicy = config.conflictPolicy ?? "manual_review";
+  const highReliabilityThreshold = config.highReliabilityThreshold ?? 0.88;
   const manualReviewDir = config.manualReviewDir ?? path.resolve(config.outputDir, "manual-review");
   const candidates = await scanAudiobookFiles(config.inputDir, config.recursive ?? true);
 
   const identifier = new OpenAiIdentifier(openAiApiKey, config.openAiModel);
-  const providers = createProviders(config.metadataProviderOrder);
+  const providers = createProviders(config.metadataProviderOrder, {
+    googleBooksApiKey: config.providerApiKeys?.googleBooksApiKey,
+  });
 
   for (const candidate of candidates) {
     const identity = await identifier.identify(candidate);
@@ -160,8 +149,10 @@ export async function organizeAudiobooks(
     }
 
     const ctx = templateContextFrom(metadata, candidate.extension, identity.part, identity.chapter);
-    const folderTemplate = config.createBookFolder === false ? "" : DEFAULT_BOOK_FOLDER_TEMPLATE;
-    const relativeBookFolder = folderTemplate ? renderTemplate(folderTemplate, ctx) : "";
+    const folderTemplate = config.createBookFolder === false
+      ? ""
+      : (config.folderTemplate ?? DEFAULT_BOOK_FOLDER_TEMPLATE);
+    const relativeBookFolder = folderTemplate ? buildFolderRelativePath(folderTemplate, ctx) : "";
     const relativeFile = buildOutputRelativePath(config.namingTemplate ?? DEFAULT_NAMING_TEMPLATE, ctx);
     let destination = path.resolve(config.outputDir, relativeBookFolder, relativeFile);
 
@@ -203,6 +194,28 @@ export async function organizeAudiobooks(
         continue;
       }
 
+      if (conflictPolicy === "rename_if_high_reliability") {
+        if (identity.confidence >= highReliabilityThreshold) {
+          destination = await findAvailablePath(destination);
+        } else {
+          actions.push({
+            source: candidate.absolutePath,
+            destination,
+            metadata,
+            status: "manual_review",
+            reason: `${reason} Confidence ${identity.confidence.toFixed(2)} below threshold ${highReliabilityThreshold.toFixed(2)}.`,
+            confidence: identity.confidence,
+          });
+          manualReviewItems.push({
+            source: candidate.absolutePath,
+            proposedDestination: destination,
+            reason: `${reason} Low confidence match requires review.`,
+            metadata,
+          });
+          continue;
+        }
+      }
+
       if (conflictPolicy === "merge") {
         destination = mergeDestinationFromSource(destination, candidate.fileName);
       }
@@ -219,6 +232,7 @@ export async function organizeAudiobooks(
       destination,
       metadata,
       status: "moved",
+      confidence: identity.confidence,
     });
 
     if (config.dryRun) {
@@ -230,7 +244,13 @@ export async function organizeAudiobooks(
 
     const bookFolder = path.dirname(destination);
     const metadataPath = await writeAudiobookshelfMetadata(bookFolder, metadata);
-    await maybeDownloadCover(bookFolder, metadata.coverUrl);
+    const coverPath = await writeCoverImage(bookFolder, metadata);
+    if (config.embedCoverInAudio && coverPath) {
+      await embedCoverInAudioIfPossible(destination, coverPath);
+    }
+    if (config.embedMetadataInAudio !== false) {
+      await embedMetadataInAudioIfPossible(destination, metadata);
+    }
 
     actions[actions.length - 1].metadataPath = metadataPath;
   }

@@ -1,8 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import axios from "axios";
-
+import { embedCoverInAudioIfPossible, embedMetadataInAudioIfPossible, writeCoverImage } from "./cover.js";
 import { ApplyManualReviewResult, BookMetadata, ManualReviewDecision, ManualReviewItem, OrganizeAction } from "./types.js";
 
 interface ReviewDocument {
@@ -44,7 +43,10 @@ async function writeAudiobookshelfMetadata(folder: string, metadata: BookMetadat
         ]
       : [],
     publishedYear: metadata.publishedYear,
+    publishedDate: metadata.publishedDate,
+    publisher: metadata.publisher,
     description: metadata.description,
+    genres: metadata.genres,
     language: metadata.language,
     isbn: metadata.isbn,
     asin: metadata.asin,
@@ -54,26 +56,12 @@ async function writeAudiobookshelfMetadata(folder: string, metadata: BookMetadat
   return outPath;
 }
 
-async function maybeDownloadCover(folder: string, coverUrl?: string): Promise<void> {
-  if (!coverUrl) {
-    return;
-  }
-
-  try {
-    const response = await axios.get<ArrayBuffer>(coverUrl, {
-      responseType: "arraybuffer",
-      timeout: 15000,
-    });
-    await fs.writeFile(path.join(folder, "cover.jpg"), Buffer.from(response.data));
-  } catch {
-    // Do not fail manual review apply if cover download fails.
-  }
-}
-
 export async function applyManualReview(
   reviewFilePath: string,
   decisions: ManualReviewDecision[],
   dryRun = false,
+  embedCoverInAudio = false,
+  embedMetadataInAudio = true,
 ): Promise<ApplyManualReviewResult> {
   const raw = await fs.readFile(reviewFilePath, "utf-8");
   const reviewDoc = JSON.parse(raw) as ReviewDocument;
@@ -140,7 +128,13 @@ export async function applyManualReview(
     const effectiveMetadata = decision.metadataOverride ?? item.metadata;
     if (effectiveMetadata) {
       const metadataPath = await writeAudiobookshelfMetadata(path.dirname(destination), effectiveMetadata);
-      await maybeDownloadCover(path.dirname(destination), effectiveMetadata.coverUrl);
+      const coverPath = await writeCoverImage(path.dirname(destination), effectiveMetadata);
+      if (embedCoverInAudio && coverPath) {
+        await embedCoverInAudioIfPossible(destination, coverPath);
+      }
+      if (embedMetadataInAudio) {
+        await embedMetadataInAudioIfPossible(destination, effectiveMetadata);
+      }
       action.metadataPath = metadataPath;
     }
   }

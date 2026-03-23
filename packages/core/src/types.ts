@@ -38,11 +38,15 @@ export interface BookMetadata {
   series?: string;
   seriesSequence?: string;
   description?: string;
+  publisher?: string;
+  publishedDate?: string;
   publishedYear?: string;
+  genres?: string[];
   language?: string;
   isbn?: string;
   asin?: string;
   coverUrl?: string;
+  coverPath?: string;
   source: string;
 }
 
@@ -70,11 +74,18 @@ export interface OrganizerConfig {
   dryRun?: boolean;
   overwrite?: boolean;
   metadataProviderOrder: MetadataProviderName[];
+  providerApiKeys?: {
+    googleBooksApiKey?: string;
+  };
   openAiModel?: string;
+  folderTemplate?: string;
   namingTemplate?: string;
   createBookFolder?: boolean;
-  conflictPolicy?: "skip" | "rename" | "merge" | "manual_review";
+  conflictPolicy?: "skip" | "rename" | "merge" | "manual_review" | "rename_if_high_reliability";
+  highReliabilityThreshold?: number;
   manualReviewDir?: string;
+  embedCoverInAudio?: boolean;
+  embedMetadataInAudio?: boolean;
 }
 
 export interface OrganizeAction {
@@ -84,6 +95,7 @@ export interface OrganizeAction {
   metadata?: BookMetadata;
   status?: "moved" | "skipped" | "manual_review";
   reason?: string;
+  confidence?: number;
 }
 
 export interface ManualReviewItem {

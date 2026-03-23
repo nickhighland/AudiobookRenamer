@@ -6,54 +6,57 @@
     <title>Audiobook Namer & Organizer</title>
     <style>
       :root {
-        --bg: #f4f0e8;
-        --card: #fffaf2;
-        --text: #1f2328;
-        --accent: #ad4f1a;
-        --accent-soft: #e8c4ad;
-        --border: #d8c6b7;
+        --bg: #f5efe5;
+        --bg2: #f0e5d3;
+        --surface: #fffdf8;
+        --surface-2: #fff7ec;
+        --ink: #2e2b28;
+        --ink-soft: #6f665f;
+        --accent: #1c6d5c;
+        --accent-2: #db6e37;
+        --line: #ddccba;
       }
 
-      * {
-        box-sizing: border-box;
-      }
+      * { box-sizing: border-box; }
 
       body {
         margin: 0;
         font-family: "Avenir Next", "Segoe UI", sans-serif;
-        background: radial-gradient(circle at top right, #fcead9, var(--bg));
-        color: var(--text);
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 90% 0%, #f6d8c3 0%, transparent 42%),
+          radial-gradient(circle at 10% 100%, #cde4de 0%, transparent 36%),
+          linear-gradient(140deg, var(--bg), var(--bg2));
         min-height: 100vh;
+      }
+
+      .layout {
+        width: min(1180px, 95vw);
+        margin: 20px auto;
         display: grid;
-        place-items: center;
-        padding: 20px;
+        gap: 14px;
       }
 
-      .panel {
-        width: min(900px, 100%);
-        background: var(--card);
-        border: 1px solid var(--border);
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
         border-radius: 16px;
-        padding: 18px;
-        box-shadow: 0 12px 34px rgba(55, 31, 17, 0.12);
-        animation: rise 300ms ease-out;
+        padding: 14px;
+        box-shadow: 0 12px 28px rgba(30, 22, 15, 0.08);
       }
 
-      @keyframes rise {
-        from {
-          opacity: 0;
-          transform: translateY(6px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
+      .hero {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
       }
 
-      h1 {
-        margin: 0 0 12px;
-        font-size: clamp(20px, 2.5vw, 32px);
-      }
+      h1 { margin: 0; font-size: clamp(22px, 2.8vw, 36px); }
+      h2 { margin: 0 0 10px; font-size: 18px; }
+      h3 { margin: 0 0 8px; font-size: 15px; }
+
+      .muted { color: var(--ink-soft); font-size: 13px; }
 
       .grid {
         display: grid;
@@ -61,368 +64,895 @@
         gap: 10px;
       }
 
-      .review-list {
-        margin-top: 10px;
-        display: grid;
-        gap: 8px;
-        max-height: 280px;
-        overflow: auto;
-      }
-
-      .review-item {
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 10px;
-        background: #fff7ee;
-      }
-
-      .review-item small {
-        display: block;
-        color: #5c5047;
-        margin-bottom: 6px;
-        word-break: break-all;
-      }
-
-      .review-search {
-        margin-top: 8px;
-        display: grid;
-        grid-template-columns: 1fr 180px 120px;
-        gap: 6px;
-      }
-
       label {
         display: flex;
         flex-direction: column;
-        font-size: 13px;
         gap: 6px;
+        font-size: 13px;
       }
 
-      input,
-      select,
-      button,
-      textarea {
-        padding: 10px;
+      input, select, button, textarea {
+        border: 1px solid var(--line);
         border-radius: 10px;
-        border: 1px solid var(--border);
+        padding: 10px;
         font: inherit;
       }
 
+      .btnrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+
       button {
-        margin-top: 10px;
+        border: 0;
         background: var(--accent);
-        color: white;
-        border: none;
+        color: #fff;
         cursor: pointer;
       }
 
-      button:hover {
-        filter: brightness(1.05);
+      button.alt { background: var(--accent-2); }
+      button.ghost { background: #efe4d5; color: #3c322a; }
+
+      details {
+        border: 1px dashed var(--line);
+        border-radius: 12px;
+        padding: 8px 10px;
+        background: var(--surface-2);
+      }
+
+      .dnd {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .dropzone {
+        min-height: 110px;
+        border: 1px dashed #c7b29d;
+        border-radius: 10px;
+        padding: 8px;
+        background: #fff;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin: 4px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: #f3ebdf;
+        cursor: grab;
+        user-select: none;
+      }
+
+      .chip.sel { background: #dceee8; border-color: #94c5b7; }
+
+      .wizard {
+        display: grid;
+        gap: 10px;
+      }
+
+      .review-card {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #fffaf3;
+        padding: 10px;
+      }
+
+      .mono {
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+        font-size: 12px;
+        word-break: break-all;
       }
 
       pre {
-        margin-top: 12px;
-        background: #faf6ef;
-        border: 1px solid var(--border);
-        padding: 10px;
-        border-radius: 10px;
-        min-height: 160px;
+        margin: 0;
+        min-height: 180px;
+        max-height: 260px;
         overflow: auto;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        background: #f9f2e8;
+        padding: 10px;
+      }
+
+      @media (max-width: 900px) {
+        .dnd { grid-template-columns: 1fr; }
       }
     </style>
   </head>
   <body>
-    <div class="panel">
-      <h1>Audiobook Namer & Organizer</h1>
-      <div class="grid">
-        <label>
-          Input Folder
-          <input id="inputDir" placeholder="/path/to/raw/audiobooks" />
-        </label>
-        <label>
-          Output Folder
-          <input id="outputDir" placeholder="/path/to/organized" />
-        </label>
-        <label>
-          OpenAI API Key
-          <input id="apiKey" type="password" placeholder="sk-..." />
-        </label>
-        <label>
-          Naming Template
-          <input id="template" value="{part} - {title} - {author}{ext}" />
-        </label>
-      </div>
-      <div class="grid" style="margin-top: 8px">
-        <label>
-          Metadata Provider Priority
-          <select id="provider">
-            <option value="librivox,openlibrary">LibriVox then OpenLibrary (free audiobook-first)</option>
-            <option value="librivox,googlebooks">LibriVox then Google Books</option>
-            <option value="openlibrary,googlebooks">OpenLibrary then Google Books</option>
-          </select>
-        </label>
-        <label>
-          OpenAI Model
-          <input id="model" value="gpt-4.1-mini" />
-        </label>
-        <label>
-          Dry Run
-          <select id="dryRun">
-            <option value="true">true</option>
-            <option value="false">false</option>
-          </select>
-        </label>
-        <label>
-          Conflict Policy
-          <select id="conflictPolicy">
-            <option value="manual_review">manual_review (recommended)</option>
-            <option value="skip">skip</option>
-            <option value="rename">rename</option>
-            <option value="merge">merge</option>
-          </select>
-        </label>
-        <label>
-          Manual Review Folder (optional)
-          <input id="manualReviewDir" placeholder="/path/to/manual-review" />
-        </label>
-      </div>
-      <button id="scanBtn">Scan</button>
-      <button id="organizeBtn">Organize</button>
-      <p style="font-size: 12px; margin: 8px 0 0; color: #5c5047">
-        Manual review flow: choose manual_review policy, run organize, then open the generated JSON file to approve/resolve flagged conflicts.
-      </p>
+    <div class="layout">
+      <section class="card hero">
+        <div>
+          <h1>Audiobook Namer & Organizer</h1>
+          <div class="muted">Autonomy-first workflow: scan, identify, review, and apply with full control.</div>
+        </div>
+        <div class="muted" id="statusLine">Ready</div>
+      </section>
 
-      <h2 style="font-size: 18px; margin: 14px 0 8px">Manual Review</h2>
-      <div class="grid">
-        <label>
-          Review JSON Path
-          <input id="reviewPath" placeholder="/path/to/manual-review-*.json" />
-        </label>
-        <label>
-          Apply Mode
-          <select id="reviewApplyDryRun">
-            <option value="true">dry run</option>
-            <option value="false">apply changes</option>
-          </select>
-        </label>
-      </div>
-      <button id="loadReviewBtn">Load Review File</button>
-      <button id="applyReviewBtn">Apply Decisions</button>
-      <div id="reviewList" class="review-list"></div>
+      <section class="card">
+        <h2>Workspace</h2>
+        <div class="grid">
+          <label>
+            Input Folder
+            <input id="inputDir" placeholder="/path/to/raw/audiobooks" />
+          </label>
+          <label>
+            Output Folder
+            <input id="outputDir" placeholder="/path/to/organized" />
+          </label>
+          <label>
+            Conflict Policy
+            <select id="conflictPolicy">
+              <option value="manual_review">manual_review (recommended)</option>
+              <option value="rename_if_high_reliability">rename_if_high_reliability</option>
+              <option value="rename">rename</option>
+              <option value="merge">merge</option>
+              <option value="skip">skip</option>
+            </select>
+          </label>
+          <label id="thresholdWrap" style="display:none">
+            High Reliability Threshold (0-1)
+            <input id="highReliabilityThreshold" type="number" min="0" max="1" step="0.01" value="0.88" />
+          </label>
+        </div>
+        <div class="muted" id="reliabilityHelp" style="margin-top:6px; display:none;">
+          With rename_if_high_reliability: confidence >= threshold is auto-renamed, confidence below threshold is sent to manual review.
+        </div>
 
-      <pre id="output">Ready.</pre>
-    </div>
+        <h3 style="margin-top:12px">Folder Path Builder (optional hierarchy)</h3>
+        <div class="dnd">
+          <div>
+            <div class="muted">Available path fields</div>
+            <div id="folderAvailable" class="dropzone"></div>
+          </div>
+          <div>
+            <div class="muted">Selected path order</div>
+            <div id="folderSelected" class="dropzone"></div>
+          </div>
+        </div>
+        <div class="grid" style="margin-top:8px">
+          <label>
+            Folder Path Preview
+            <input id="folderPreview" readonly />
+          </label>
+        </div>
 
-    <script>
-      /** @type {Array<{ source: string; proposedDestination: string; reason: string; metadata?: unknown }>} */
-      let loadedReviewItems = [];
-      /** @type {Record<number, Array<{ provider: string; metadata: any }>>} */
-      let searchResultsByIndex = {};
-      /** @type {Record<number, any>} */
-      let selectedMetadataByIndex = {};
+        <h3 style="margin-top:12px">Naming Builder (drag fields in/out and reorder)</h3>
+        <div class="dnd">
+          <div>
+            <div class="muted">Available fields</div>
+            <div id="tokenAvailable" class="dropzone"></div>
+          </div>
+          <div>
+            <div class="muted">Selected order</div>
+            <div id="tokenSelected" class="dropzone"></div>
+          </div>
+        </div>
+        <div class="grid" style="margin-top:8px">
+          <label>
+            Joiner
+            <input id="tokenJoiner" value=" - " />
+          </label>
+          <label>
+            File Suffix (before extension)
+            <input id="tokenSuffix" value="" placeholder="optional" />
+          </label>
+          <label>
+            Template Preview
+            <input id="templatePreview" readonly />
+          </label>
+        </div>
 
-      const output = document.getElementById("output");
-      const inputDir = document.getElementById("inputDir");
-      const outputDir = document.getElementById("outputDir");
-      const apiKey = document.getElementById("apiKey");
-      const template = document.getElementById("template");
-      const provider = document.getElementById("provider");
-      const model = document.getElementById("model");
-      const dryRun = document.getElementById("dryRun");
-      const conflictPolicy = document.getElementById("conflictPolicy");
-      const manualReviewDir = document.getElementById("manualReviewDir");
-      const scanBtn = document.getElementById("scanBtn");
-      const organizeBtn = document.getElementById("organizeBtn");
-      const reviewPath = document.getElementById("reviewPath");
-      const reviewApplyDryRun = document.getElementById("reviewApplyDryRun");
-      const loadReviewBtn = document.getElementById("loadReviewBtn");
-      const applyReviewBtn = document.getElementById("applyReviewBtn");
-      const reviewList = document.getElementById("reviewList");
+        <div class="btnrow">
+          <button class="ghost" id="scanBtn">Scan</button>
+          <button id="organizeBtn">Organize</button>
+        </div>
+      </section>
 
-      function renderReviewItems(items) {
-        reviewList.innerHTML = "";
-        searchResultsByIndex = {};
-        selectedMetadataByIndex = {};
-        if (!items.length) {
-          reviewList.textContent = "No manual review items loaded.";
-          return;
-        }
+      <section class="card">
+        <details>
+          <summary><strong>Setup & API Options</strong> (hidden by default)</summary>
+          <div class="grid" style="margin-top:10px">
+            <label>
+              OpenAI API Key
+              <input id="apiKey" type="password" placeholder="sk-..." />
+            </label>
+            <label>
+              OpenAI Model
+              <select id="modelSelect"></select>
+            </label>
+            <div style="display:flex;align-items:end">
+              <button class="ghost" id="loadModelsBtn" type="button">Load Available Models</button>
+            </div>
+            <label>
+              Manual Review Folder (optional)
+              <input id="manualReviewDir" placeholder="/path/to/manual-review" />
+            </label>
+            <label>
+              Dry Run
+              <select id="dryRun">
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            </label>
+            <label>
+              Embed Cover In Audio
+              <select id="embedCoverInAudio">
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            </label>
+            <label>
+              Embed Metadata In Audio
+              <select id="embedMetadataInAudio">
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            </label>
+          </div>
 
-        items.forEach((item, index) => {
-          const wrap = document.createElement("div");
-          wrap.className = "review-item";
-          wrap.innerHTML = `
-            <small><strong>Source:</strong> ${item.source}</small>
-            <small><strong>Proposed:</strong> ${item.proposedDestination}</small>
-            <small><strong>Reason:</strong> ${item.reason}</small>
+          <h3 style="margin-top:12px">Metadata Provider Priority</h3>
+          <div class="dnd">
+            <div>
+              <div class="muted">Available providers</div>
+              <div id="providerAvailable" class="dropzone"></div>
+            </div>
+            <div>
+              <div class="muted">Selected provider order</div>
+              <div id="providerSelected" class="dropzone"></div>
+            </div>
+          </div>
+
+          <div class="grid" style="margin-top:8px">
+            <label id="googleBooksApiWrap" style="display:none">
+              Google Books API Key (shown when provider selected)
+              <input id="googleBooksApiKey" type="password" placeholder="AIza..." />
+            </label>
+          </div>
+        </details>
+      </section>
+
+      <section class="card wizard">
+        <h2>Manual Review Wizard (one at a time)</h2>
+        <div class="grid">
+          <label>
+            Review JSON Path
+            <input id="reviewPath" placeholder="/path/to/manual-review-*.json" />
+          </label>
+          <label>
+            Apply Mode
+            <select id="reviewApplyDryRun">
+              <option value="true">dry run</option>
+              <option value="false">apply changes</option>
+            </select>
+          </label>
+        </div>
+        <div class="btnrow">
+          <button class="ghost" id="loadReviewBtn">Load Review File</button>
+          <button class="ghost" id="prevItemBtn">Prev</button>
+          <button class="ghost" id="nextItemBtn">Next</button>
+          <button class="alt" id="saveDecisionBtn">Save Decision</button>
+          <button id="applyReviewBtn">Apply All Decisions</button>
+        </div>
+        <div class="muted" id="reviewProgress">No review loaded.</div>
+
+        <div id="reviewCard" class="review-card" style="display:none">
+          <div class="mono" id="reviewSource"></div>
+          <div class="mono" id="reviewProposed"></div>
+          <div class="muted" id="reviewReason" style="margin-top:6px"></div>
+
+          <div class="grid" style="margin-top:8px">
             <label>
               Decision
-              <select data-index="${index}" data-kind="action">
+              <select id="reviewDecisionAction">
                 <option value="approve">approve</option>
                 <option value="skip">skip</option>
                 <option value="custom_destination">custom_destination</option>
               </select>
             </label>
             <label>
-              Custom Destination (if custom_destination)
-              <input data-index="${index}" data-kind="destination" placeholder="${item.proposedDestination}" />
+              Custom Destination
+              <input id="reviewDecisionDestination" placeholder="optional custom path" />
             </label>
-            <div class="review-search">
-              <input data-index="${index}" data-kind="searchQuery" placeholder="Search correct match (title + author)" value="${item.metadata?.title ?? ""}" />
-              <select data-index="${index}" data-kind="searchProviders">
+            <label>
+              Cover Override Upload
+              <input id="reviewCoverUpload" type="file" accept="image/*" />
+            </label>
+          </div>
+
+          <div class="grid" style="margin-top:8px">
+            <label>
+              Correct Match Search
+              <input id="reviewSearchQuery" placeholder="title + author" />
+            </label>
+            <label>
+              Search Providers
+              <select id="reviewSearchProviders">
                 <option value="librivox,openlibrary">librivox + openlibrary</option>
                 <option value="librivox,googlebooks">librivox + googlebooks</option>
                 <option value="openlibrary,googlebooks">openlibrary + googlebooks</option>
               </select>
-              <button type="button" data-index="${index}" data-kind="searchBtn">Find Match</button>
-            </div>
+            </label>
+            <div style="display:flex;align-items:end"><button class="ghost" type="button" id="reviewSearchBtn">Find Correct Match</button></div>
             <label>
               Search Results
-              <select data-index="${index}" data-kind="searchResults">
-                <option value="">No override selected (keep original)</option>
+              <select id="reviewSearchResults">
+                <option value="">No override selected</option>
               </select>
             </label>
-          `;
-          reviewList.appendChild(wrap);
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Output</h2>
+        <pre id="output">Ready.</pre>
+      </section>
+    </div>
+
+    <script>
+      const TOKEN_DEFS = [
+        { id: "author", token: "{author}" },
+        { id: "title", token: "{title}" },
+        { id: "part", token: "{part}" },
+        { id: "chapter", token: "{chapter}" },
+        { id: "series", token: "{series}" },
+        { id: "seriesNumber", token: "{seriesNumber}" },
+        { id: "publishedYear", token: "{publishedYear}" },
+        { id: "publisher", token: "{publisher}" },
+      ];
+
+      const PROVIDER_DEFS = ["librivox", "openlibrary", "googlebooks"];
+
+      const state = {
+        availableTokens: TOKEN_DEFS.map((x) => x.id).filter((id) => !["part", "title", "author"].includes(id)),
+        selectedTokens: ["part", "title", "author"],
+        availableFolderTokens: TOKEN_DEFS.map((x) => x.id).filter((id) => !["author", "series", "title"].includes(id)),
+        selectedFolderTokens: ["author", "series", "title"],
+        availableProviders: ["googlebooks"],
+        selectedProviders: ["librivox", "openlibrary"],
+        loadedReviewItems: [],
+        reviewIndex: 0,
+        decisionsBySource: {},
+        searchResultsBySource: {},
+      };
+
+      const $ = (id) => document.getElementById(id);
+      const output = $("output");
+      const statusLine = $("statusLine");
+
+      const inputDir = $("inputDir");
+      const outputDir = $("outputDir");
+      const apiKey = $("apiKey");
+      const modelSelect = $("modelSelect");
+      const loadModelsBtn = $("loadModelsBtn");
+      const dryRun = $("dryRun");
+      const conflictPolicy = $("conflictPolicy");
+      const highReliabilityThreshold = $("highReliabilityThreshold");
+      const thresholdWrap = $("thresholdWrap");
+      const reliabilityHelp = $("reliabilityHelp");
+      const manualReviewDir = $("manualReviewDir");
+      const embedCoverInAudio = $("embedCoverInAudio");
+      const embedMetadataInAudio = $("embedMetadataInAudio");
+      const googleBooksApiWrap = $("googleBooksApiWrap");
+      const googleBooksApiKey = $("googleBooksApiKey");
+
+      const tokenAvailable = $("tokenAvailable");
+      const tokenSelected = $("tokenSelected");
+      const folderAvailable = $("folderAvailable");
+      const folderSelected = $("folderSelected");
+      const folderPreview = $("folderPreview");
+      const tokenJoiner = $("tokenJoiner");
+      const tokenSuffix = $("tokenSuffix");
+      const templatePreview = $("templatePreview");
+
+      const providerAvailable = $("providerAvailable");
+      const providerSelected = $("providerSelected");
+
+      const scanBtn = $("scanBtn");
+      const organizeBtn = $("organizeBtn");
+
+      const reviewPath = $("reviewPath");
+      const reviewApplyDryRun = $("reviewApplyDryRun");
+      const loadReviewBtn = $("loadReviewBtn");
+      const prevItemBtn = $("prevItemBtn");
+      const nextItemBtn = $("nextItemBtn");
+      const saveDecisionBtn = $("saveDecisionBtn");
+      const applyReviewBtn = $("applyReviewBtn");
+      const reviewProgress = $("reviewProgress");
+
+      const reviewCard = $("reviewCard");
+      const reviewSource = $("reviewSource");
+      const reviewProposed = $("reviewProposed");
+      const reviewReason = $("reviewReason");
+      const reviewDecisionAction = $("reviewDecisionAction");
+      const reviewDecisionDestination = $("reviewDecisionDestination");
+      const reviewCoverUpload = $("reviewCoverUpload");
+      const reviewSearchQuery = $("reviewSearchQuery");
+      const reviewSearchProviders = $("reviewSearchProviders");
+      const reviewSearchBtn = $("reviewSearchBtn");
+      const reviewSearchResults = $("reviewSearchResults");
+
+      function setStatus(text) {
+        statusLine.textContent = text;
+      }
+
+      function log(value) {
+        output.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+      }
+
+      function tokenById(id) {
+        return TOKEN_DEFS.find((x) => x.id === id);
+      }
+
+      function buildNamingTemplate() {
+        const joiner = tokenJoiner.value;
+        const suffix = tokenSuffix.value;
+        const parts = state.selectedTokens.map((id) => tokenById(id)?.token || "").filter(Boolean);
+        const base = parts.length ? parts.join(joiner) : "{title}";
+        const full = `${base}${suffix || ""}{ext}`;
+        templatePreview.value = full;
+        return full;
+      }
+
+      function buildFolderTemplate() {
+        const tokens = state.selectedFolderTokens.map((id) => tokenById(id)?.token || "").filter(Boolean);
+        const template = tokens.join("/");
+        folderPreview.value = template || "{title}";
+        return folderPreview.value;
+      }
+
+      function renderChips(container, ids, kind) {
+        container.innerHTML = "";
+        ids.forEach((id, index) => {
+          const chip = document.createElement("div");
+          chip.className = `chip${kind === "selected" ? " sel" : ""}`;
+          chip.draggable = true;
+          chip.dataset.id = id;
+          chip.dataset.kind = kind;
+          chip.dataset.index = String(index);
+          chip.textContent = id;
+          container.appendChild(chip);
         });
       }
 
-      function collectDecisions() {
-        return loadedReviewItems.map((item, index) => {
-          const actionEl = reviewList.querySelector(`select[data-index="${index}"][data-kind="action"]`);
-          const destinationEl = reviewList.querySelector(`input[data-index="${index}"][data-kind="destination"]`);
-          const action = actionEl ? actionEl.value : "skip";
-          const destination = destinationEl ? destinationEl.value.trim() : "";
-
-          return {
-            source: item.source,
-            action,
-            destination: action === "custom_destination" ? destination : undefined,
-            metadataOverride: selectedMetadataByIndex[index] || undefined,
-          };
+      function renderProviderChips(container, ids, kind) {
+        container.innerHTML = "";
+        ids.forEach((id, index) => {
+          const chip = document.createElement("div");
+          chip.className = `chip${kind === "selected" ? " sel" : ""}`;
+          chip.draggable = true;
+          chip.dataset.id = id;
+          chip.dataset.kind = kind;
+          chip.dataset.index = String(index);
+          chip.textContent = id;
+          container.appendChild(chip);
         });
       }
 
-      function hydrateResultsSelect(index) {
-        const resultsSelect = reviewList.querySelector(`select[data-index="${index}"][data-kind="searchResults"]`);
-        if (!resultsSelect) {
+      function renderNamingBuilder() {
+        renderChips(tokenAvailable, state.availableTokens, "available");
+        renderChips(tokenSelected, state.selectedTokens, "selected");
+        buildNamingTemplate();
+      }
+
+      function renderFolderBuilder() {
+        renderChips(folderAvailable, state.availableFolderTokens, "available");
+        renderChips(folderSelected, state.selectedFolderTokens, "selected");
+        buildFolderTemplate();
+      }
+
+      function renderProviders() {
+        renderProviderChips(providerAvailable, state.availableProviders, "available");
+        renderProviderChips(providerSelected, state.selectedProviders, "selected");
+        googleBooksApiWrap.style.display = state.selectedProviders.includes("googlebooks") ? "block" : "none";
+      }
+
+      function setupDnd(container, onDrop) {
+        container.addEventListener("dragover", (event) => event.preventDefault());
+        container.addEventListener("drop", (event) => {
+          event.preventDefault();
+          const raw = event.dataTransfer?.getData("text/plain");
+          if (!raw) {
+            return;
+          }
+          const payload = JSON.parse(raw);
+          const target = event.target.closest(".chip");
+          const targetIndex = target ? Number(target.dataset.index) : undefined;
+          onDrop(payload, Number.isFinite(targetIndex) ? targetIndex : undefined);
+        });
+      }
+
+      document.addEventListener("dragstart", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement) || !target.classList.contains("chip")) {
+          return;
+        }
+        event.dataTransfer?.setData("text/plain", JSON.stringify({
+          id: target.dataset.id,
+          kind: target.dataset.kind,
+          index: Number(target.dataset.index),
+          scope: target.parentElement?.id,
+        }));
+      });
+
+      setupDnd(tokenSelected, (payload, targetIndex) => {
+        if (payload.scope === "tokenAvailable") {
+          state.availableTokens = state.availableTokens.filter((x) => x !== payload.id);
+          if (!state.selectedTokens.includes(payload.id)) {
+            if (targetIndex === undefined) {
+              state.selectedTokens.push(payload.id);
+            } else {
+              state.selectedTokens.splice(targetIndex, 0, payload.id);
+            }
+          }
+        } else if (payload.scope === "tokenSelected") {
+          const existingIndex = state.selectedTokens.indexOf(payload.id);
+          if (existingIndex >= 0) {
+            state.selectedTokens.splice(existingIndex, 1);
+            const insertAt = targetIndex === undefined ? state.selectedTokens.length : targetIndex;
+            state.selectedTokens.splice(insertAt, 0, payload.id);
+          }
+        }
+        renderNamingBuilder();
+      });
+
+      setupDnd(tokenAvailable, (payload) => {
+        if (payload.scope === "tokenSelected") {
+          state.selectedTokens = state.selectedTokens.filter((x) => x !== payload.id);
+          if (!state.availableTokens.includes(payload.id)) {
+            state.availableTokens.push(payload.id);
+          }
+        }
+        renderNamingBuilder();
+      });
+
+      setupDnd(folderSelected, (payload, targetIndex) => {
+        if (payload.scope === "folderAvailable") {
+          state.availableFolderTokens = state.availableFolderTokens.filter((x) => x !== payload.id);
+          if (!state.selectedFolderTokens.includes(payload.id)) {
+            const insertAt = targetIndex === undefined ? state.selectedFolderTokens.length : targetIndex;
+            state.selectedFolderTokens.splice(insertAt, 0, payload.id);
+          }
+        } else if (payload.scope === "folderSelected") {
+          const existingIndex = state.selectedFolderTokens.indexOf(payload.id);
+          if (existingIndex >= 0) {
+            state.selectedFolderTokens.splice(existingIndex, 1);
+            const insertAt = targetIndex === undefined ? state.selectedFolderTokens.length : targetIndex;
+            state.selectedFolderTokens.splice(insertAt, 0, payload.id);
+          }
+        }
+        renderFolderBuilder();
+      });
+
+      setupDnd(folderAvailable, (payload) => {
+        if (payload.scope === "folderSelected") {
+          state.selectedFolderTokens = state.selectedFolderTokens.filter((x) => x !== payload.id);
+          if (!state.availableFolderTokens.includes(payload.id)) {
+            state.availableFolderTokens.push(payload.id);
+          }
+        }
+        renderFolderBuilder();
+      });
+
+      setupDnd(providerSelected, (payload, targetIndex) => {
+        if (!PROVIDER_DEFS.includes(payload.id)) {
+          return;
+        }
+        if (payload.scope === "providerAvailable") {
+          state.availableProviders = state.availableProviders.filter((x) => x !== payload.id);
+          if (!state.selectedProviders.includes(payload.id)) {
+            const insertAt = targetIndex === undefined ? state.selectedProviders.length : targetIndex;
+            state.selectedProviders.splice(insertAt, 0, payload.id);
+          }
+        } else if (payload.scope === "providerSelected") {
+          const existingIndex = state.selectedProviders.indexOf(payload.id);
+          if (existingIndex >= 0) {
+            state.selectedProviders.splice(existingIndex, 1);
+            const insertAt = targetIndex === undefined ? state.selectedProviders.length : targetIndex;
+            state.selectedProviders.splice(insertAt, 0, payload.id);
+          }
+        }
+        renderProviders();
+      });
+
+      setupDnd(providerAvailable, (payload) => {
+        if (payload.scope === "providerSelected") {
+          state.selectedProviders = state.selectedProviders.filter((x) => x !== payload.id);
+          if (!state.availableProviders.includes(payload.id)) {
+            state.availableProviders.push(payload.id);
+          }
+        }
+        renderProviders();
+      });
+
+      function readProviderApiKeys() {
+        return {
+          googleBooksApiKey: googleBooksApiKey.value.trim() || undefined,
+        };
+      }
+
+      function currentReviewItem() {
+        return state.loadedReviewItems[state.reviewIndex];
+      }
+
+      function defaultDecisionFor(item) {
+        return {
+          source: item.source,
+          action: "approve",
+          destination: item.proposedDestination,
+          metadataOverride: undefined,
+        };
+      }
+
+      function saveCurrentDecision() {
+        const item = currentReviewItem();
+        if (!item) {
+          return;
+        }
+        const existing = state.decisionsBySource[item.source] || defaultDecisionFor(item);
+        state.decisionsBySource[item.source] = {
+          ...existing,
+          action: reviewDecisionAction.value,
+          destination: reviewDecisionDestination.value.trim() || item.proposedDestination,
+        };
+
+        const uploadFile = reviewCoverUpload.files?.[0];
+        if (uploadFile?.path) {
+          const decision = state.decisionsBySource[item.source];
+          const override = decision.metadataOverride || { ...(item.metadata || {}) };
+          override.coverPath = uploadFile.path;
+          decision.metadataOverride = override;
+        }
+      }
+
+      function renderReviewResultOptions(sourceKey) {
+        const results = state.searchResultsBySource[sourceKey] || [];
+        reviewSearchResults.innerHTML = "<option value=''>No override selected</option>";
+        results.forEach((entry, idx) => {
+          const opt = document.createElement("option");
+          const author = Array.isArray(entry.metadata?.authors) ? entry.metadata.authors.join(", ") : "Unknown";
+          opt.value = String(idx);
+          opt.textContent = `${entry.provider}: ${entry.metadata?.title || "Unknown"} - ${author}`;
+          reviewSearchResults.appendChild(opt);
+        });
+      }
+
+      function renderCurrentReviewItem() {
+        const item = currentReviewItem();
+        if (!item) {
+          reviewCard.style.display = "none";
+          reviewProgress.textContent = "No review items loaded.";
           return;
         }
 
-        const results = searchResultsByIndex[index] || [];
-        resultsSelect.innerHTML = `<option value="">No override selected (keep original)</option>`;
+        reviewCard.style.display = "block";
+        reviewProgress.textContent = `Item ${state.reviewIndex + 1} of ${state.loadedReviewItems.length}`;
+        reviewSource.textContent = `Source: ${item.source}`;
+        reviewProposed.textContent = `Proposed: ${item.proposedDestination}`;
+        reviewReason.textContent = item.reason || "No reason provided.";
 
-        results.forEach((result, resultIndex) => {
-          const option = document.createElement("option");
-          const author = Array.isArray(result.metadata?.authors) ? result.metadata.authors.join(", ") : "Unknown";
-          option.value = String(resultIndex);
-          option.textContent = `${result.provider}: ${result.metadata?.title ?? "Unknown Title"} - ${author}`;
-          resultsSelect.appendChild(option);
-        });
+        const decision = state.decisionsBySource[item.source] || defaultDecisionFor(item);
+        state.decisionsBySource[item.source] = decision;
 
-        resultsSelect.addEventListener("change", () => {
-          if (resultsSelect.value === "") {
-            delete selectedMetadataByIndex[index];
-            return;
+        reviewDecisionAction.value = decision.action;
+        reviewDecisionDestination.value = decision.destination || item.proposedDestination;
+        reviewSearchQuery.value = decision.metadataOverride?.title || item.metadata?.title || "";
+        reviewCoverUpload.value = "";
+
+        renderReviewResultOptions(item.source);
+      }
+
+      function collectAllDecisions() {
+        return state.loadedReviewItems.map((item) => {
+          const decision = state.decisionsBySource[item.source] || defaultDecisionFor(item);
+          if (!decision.destination) {
+            decision.destination = item.proposedDestination;
           }
-          const selected = results[Number(resultsSelect.value)];
-          if (selected?.metadata) {
-            selectedMetadataByIndex[index] = selected.metadata;
-          }
+          return decision;
         });
       }
 
+      async function loadModels() {
+        const key = apiKey.value.trim();
+        if (!key) {
+          log("OpenAI API key is required to load models.");
+          return;
+        }
+        setStatus("Loading models...");
+        try {
+          const res = await window.organizerApi.listOpenAiModels(key);
+          const models = Array.isArray(res.models) ? res.models : [];
+          modelSelect.innerHTML = "";
+          models.forEach((m) => {
+            const option = document.createElement("option");
+            option.value = m;
+            option.textContent = m;
+            modelSelect.appendChild(option);
+          });
+          if (!models.length) {
+            const option = document.createElement("option");
+            option.value = "gpt-5-mini";
+            option.textContent = "gpt-5-mini";
+            modelSelect.appendChild(option);
+          }
+          setStatus(`Loaded ${models.length} models`);
+        } catch (error) {
+          setStatus("Model load failed");
+          log(String(error));
+        }
+      }
+
+      conflictPolicy.addEventListener("change", () => {
+        thresholdWrap.style.display = conflictPolicy.value === "rename_if_high_reliability" ? "block" : "none";
+        reliabilityHelp.style.display = conflictPolicy.value === "rename_if_high_reliability" ? "block" : "none";
+      });
+
+      tokenJoiner.addEventListener("input", buildNamingTemplate);
+      tokenSuffix.addEventListener("input", buildNamingTemplate);
+      loadModelsBtn.addEventListener("click", loadModels);
+
       scanBtn.addEventListener("click", async () => {
-        output.textContent = "Scanning...";
+        setStatus("Scanning...");
         try {
           const result = await window.organizerApi.scan(inputDir.value, true);
-          output.textContent = JSON.stringify(result, null, 2);
+          setStatus(`Scanned ${result.count || 0} files`);
+          log(result);
         } catch (error) {
-          output.textContent = String(error);
+          setStatus("Scan failed");
+          log(String(error));
         }
       });
 
       organizeBtn.addEventListener("click", async () => {
-        output.textContent = "Organizing...";
+        setStatus("Organizing...");
         try {
-          const order = provider.value.split(",");
           const result = await window.organizerApi.organize(
             {
               inputDir: inputDir.value,
               outputDir: outputDir.value,
-              metadataProviderOrder: order,
-              namingTemplate: template.value,
-              openAiModel: model.value,
+              metadataProviderOrder: state.selectedProviders,
+              providerApiKeys: readProviderApiKeys(),
+              folderTemplate: buildFolderTemplate(),
+              namingTemplate: buildNamingTemplate(),
+              openAiModel: modelSelect.value || "gpt-5-mini",
               dryRun: dryRun.value === "true",
               conflictPolicy: conflictPolicy.value,
+              highReliabilityThreshold: Number(highReliabilityThreshold.value || 0.88),
               manualReviewDir: manualReviewDir.value || undefined,
+              embedCoverInAudio: embedCoverInAudio.value === "true",
+              embedMetadataInAudio: embedMetadataInAudio.value === "true",
               recursive: true,
               createBookFolder: true,
             },
             apiKey.value,
           );
-          output.textContent = JSON.stringify(result, null, 2);
+
+          if (result.manualReviewPath) {
+            reviewPath.value = result.manualReviewPath;
+          }
+          setStatus("Organize complete");
+          log(result);
         } catch (error) {
-          output.textContent = String(error);
+          setStatus("Organize failed");
+          log(String(error));
         }
       });
 
       loadReviewBtn.addEventListener("click", async () => {
-        output.textContent = "Loading manual review file...";
+        setStatus("Loading review...");
         try {
           const doc = await window.organizerApi.loadManualReview(reviewPath.value);
-          loadedReviewItems = Array.isArray(doc.items) ? doc.items : [];
-          renderReviewItems(loadedReviewItems);
-          output.textContent = JSON.stringify({ loaded: loadedReviewItems.length }, null, 2);
+          state.loadedReviewItems = Array.isArray(doc.items) ? doc.items : [];
+          state.reviewIndex = 0;
+          state.decisionsBySource = {};
+          state.searchResultsBySource = {};
+          renderCurrentReviewItem();
+          setStatus(`Loaded ${state.loadedReviewItems.length} review items`);
+          log({ loaded: state.loadedReviewItems.length });
         } catch (error) {
-          output.textContent = String(error);
+          setStatus("Load review failed");
+          log(String(error));
         }
       });
 
-      applyReviewBtn.addEventListener("click", async () => {
-        output.textContent = "Applying manual review decisions...";
+      prevItemBtn.addEventListener("click", () => {
+        if (!state.loadedReviewItems.length) {
+          return;
+        }
+        saveCurrentDecision();
+        state.reviewIndex = Math.max(0, state.reviewIndex - 1);
+        renderCurrentReviewItem();
+      });
+
+      nextItemBtn.addEventListener("click", () => {
+        if (!state.loadedReviewItems.length) {
+          return;
+        }
+        saveCurrentDecision();
+        state.reviewIndex = Math.min(state.loadedReviewItems.length - 1, state.reviewIndex + 1);
+        renderCurrentReviewItem();
+      });
+
+      saveDecisionBtn.addEventListener("click", () => {
+        saveCurrentDecision();
+        setStatus("Decision saved");
+      });
+
+      reviewSearchBtn.addEventListener("click", async () => {
+        const item = currentReviewItem();
+        if (!item) {
+          return;
+        }
+        setStatus("Searching metadata...");
         try {
-          const decisions = collectDecisions();
+          const res = await window.organizerApi.searchMetadata(
+            reviewSearchQuery.value,
+            reviewSearchProviders.value.split(","),
+            readProviderApiKeys(),
+          );
+          state.searchResultsBySource[item.source] = Array.isArray(res.results) ? res.results : [];
+          renderReviewResultOptions(item.source);
+          setStatus(`Found ${state.searchResultsBySource[item.source].length} matches`);
+        } catch (error) {
+          setStatus("Metadata search failed");
+          log(String(error));
+        }
+      });
+
+      reviewSearchResults.addEventListener("change", () => {
+        const item = currentReviewItem();
+        if (!item) {
+          return;
+        }
+        const results = state.searchResultsBySource[item.source] || [];
+        const selected = results[Number(reviewSearchResults.value)];
+        const decision = state.decisionsBySource[item.source] || defaultDecisionFor(item);
+        if (selected?.metadata) {
+          decision.metadataOverride = { ...selected.metadata };
+        } else {
+          delete decision.metadataOverride;
+        }
+        state.decisionsBySource[item.source] = decision;
+      });
+
+      applyReviewBtn.addEventListener("click", async () => {
+        saveCurrentDecision();
+        setStatus("Applying review...");
+        try {
+          const decisions = collectAllDecisions();
           const result = await window.organizerApi.applyManualReview(
             reviewPath.value,
             decisions,
             reviewApplyDryRun.value === "true",
+            embedCoverInAudio.value === "true",
+            embedMetadataInAudio.value === "true",
           );
-          output.textContent = JSON.stringify(result, null, 2);
+          setStatus("Manual review applied");
+          log(result);
         } catch (error) {
-          output.textContent = String(error);
+          setStatus("Manual review apply failed");
+          log(String(error));
         }
       });
 
-      reviewList.addEventListener("click", async (event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLElement)) {
-          return;
-        }
+      function boot() {
+        renderNamingBuilder();
+        renderFolderBuilder();
+        renderProviders();
+        thresholdWrap.style.display = "none";
+        reliabilityHelp.style.display = "none";
+        const seed = ["gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-4.1", "o4-mini"];
+        seed.forEach((m) => {
+          const option = document.createElement("option");
+          option.value = m;
+          option.textContent = m;
+          modelSelect.appendChild(option);
+        });
+      }
 
-        if (target.dataset.kind !== "searchBtn") {
-          return;
-        }
-
-        const index = Number(target.dataset.index);
-        const queryEl = reviewList.querySelector(`input[data-index="${index}"][data-kind="searchQuery"]`);
-        const providersEl = reviewList.querySelector(`select[data-index="${index}"][data-kind="searchProviders"]`);
-        if (!queryEl || !providersEl) {
-          return;
-        }
-
-        output.textContent = `Searching metadata for review item ${index + 1}...`;
-        try {
-          const query = queryEl.value.trim();
-          const providers = providersEl.value.split(",");
-          const result = await window.organizerApi.searchMetadata(query, providers);
-          const normalized = Array.isArray(result.results) ? result.results : [];
-          searchResultsByIndex[index] = normalized;
-          hydrateResultsSelect(index);
-          output.textContent = JSON.stringify({ item: index + 1, resultCount: normalized.length }, null, 2);
-        } catch (error) {
-          output.textContent = String(error);
-        }
-      });
+      boot();
     </script>
   </body>
 </html>

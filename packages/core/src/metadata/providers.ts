@@ -2,6 +2,10 @@ import axios from "axios";
 
 import { BookIdentity, BookMetadata, MetadataProviderName, MetadataSearchResult } from "../types.js";
 
+interface ProviderOptions {
+  googleBooksApiKey?: string;
+}
+
 export interface MetadataProvider {
   readonly name: MetadataProviderName;
   lookup(identity: BookIdentity): Promise<BookMetadata | null>;
@@ -73,8 +77,11 @@ export class OpenLibraryProvider implements MetadataProvider {
         title: best.title ?? query,
         subtitle: undefined,
         authors: Array.isArray(best.author_name) && best.author_name.length > 0 ? best.author_name : ["Unknown Author"],
+        publisher: Array.isArray(best.publisher) ? best.publisher[0] : undefined,
+        publishedDate: best.first_publish_year ? String(best.first_publish_year) : undefined,
         publishedYear: year,
         language: Array.isArray(best.language) ? best.language[0] : undefined,
+        genres: Array.isArray(best.subject) ? best.subject.slice(0, 5) : undefined,
         isbn: Array.isArray(best.isbn) ? best.isbn[0] : undefined,
         coverUrl,
         source: this.name,
@@ -91,10 +98,16 @@ export class OpenLibraryProvider implements MetadataProvider {
 
 export class GoogleBooksProvider implements MetadataProvider {
   readonly name = "googlebooks";
+  private readonly apiKey?: string;
+
+  constructor(options?: ProviderOptions) {
+    this.apiKey = options?.googleBooksApiKey;
+  }
 
   async search(query: string): Promise<BookMetadata[]> {
     const encoded = encodeURIComponent(query.trim());
-    const url = `https://www.googleapis.com/books/v1/volumes?q=${encoded}&maxResults=5`;
+    const keyParam = this.apiKey ? `&key=${encodeURIComponent(this.apiKey)}` : "";
+    const url = `https://www.googleapis.com/books/v1/volumes?q=${encoded}&maxResults=5${keyParam}`;
     const response = await axios.get(url, { timeout: 12000 });
     const items = Array.isArray(response.data?.items) ? response.data.items : [];
 
@@ -113,7 +126,10 @@ export class GoogleBooksProvider implements MetadataProvider {
           subtitle: volumeInfo.subtitle,
           authors: Array.isArray(volumeInfo.authors) && volumeInfo.authors.length > 0 ? volumeInfo.authors : ["Unknown Author"],
           description: volumeInfo.description,
+          publisher: volumeInfo.publisher,
+          publishedDate: volumeInfo.publishedDate,
           publishedYear: volumeInfo.publishedDate?.slice(0, 4),
+          genres: Array.isArray(volumeInfo.categories) ? volumeInfo.categories : undefined,
           language: volumeInfo.language,
           isbn,
           coverUrl: volumeInfo.imageLinks?.thumbnail,
@@ -129,11 +145,11 @@ export class GoogleBooksProvider implements MetadataProvider {
   }
 }
 
-export function createProviders(order: MetadataProviderName[]): MetadataProvider[] {
+export function createProviders(order: MetadataProviderName[], options?: ProviderOptions): MetadataProvider[] {
   const map: Record<string, MetadataProvider> = {
     librivox: new LibriVoxProvider(),
     openlibrary: new OpenLibraryProvider(),
-    googlebooks: new GoogleBooksProvider(),
+    googlebooks: new GoogleBooksProvider(options),
   };
 
   return order.map((name) => map[name]).filter(Boolean);
@@ -142,8 +158,9 @@ export function createProviders(order: MetadataProviderName[]): MetadataProvider
 export async function searchMetadata(
   query: string,
   providerOrder: MetadataProviderName[],
+  options?: ProviderOptions,
 ): Promise<MetadataSearchResult[]> {
-  const providers = createProviders(providerOrder);
+  const providers = createProviders(providerOrder, options);
   const output: MetadataSearchResult[] = [];
 
   for (const provider of providers) {

@@ -18,7 +18,7 @@ export class OpenAiIdentifier {
   private readonly client: OpenAI;
   private readonly model: string;
 
-  constructor(apiKey: string, model = "gpt-4.1-mini") {
+  constructor(apiKey: string, model = "gpt-5-mini") {
     this.client = new OpenAI({ apiKey });
     this.model = model;
   }
@@ -79,4 +79,28 @@ export class OpenAiIdentifier {
 
     return parsed.data;
   }
+}
+
+export async function listOpenAiModels(apiKey: string): Promise<string[]> {
+  const client = new OpenAI({ apiKey });
+  const response = await client.models.list();
+
+  const preferred = [
+    "gpt-5",
+    "gpt-5-mini",
+    "gpt-5-nano",
+    "gpt-4.1",
+    "gpt-4.1-mini",
+    "gpt-4o",
+    "gpt-4o-mini",
+    "o4-mini",
+  ];
+
+  const fetched = response.data
+    .map((model) => model.id)
+    .filter((id) => id.startsWith("gpt-") || id.startsWith("o"))
+    .sort((a, b) => a.localeCompare(b));
+
+  const merged = [...new Set([...preferred, ...fetched])];
+  return merged;
 }
