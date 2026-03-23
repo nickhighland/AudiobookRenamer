@@ -1,17 +1,23 @@
-version: "3.8"
 services:
   audiobookrenamer:
-    image: nickhighland/audiobookrenamer:latest
+    image: nickhighland/audiobookrenamer:0.1.1
     container_name: audiobookrenamer
     restart: unless-stopped
     ports:
-      - "3000:3000" # adjust if your API uses a different port
+      - "4033:4033"
     environment:
+      - PORT=4033
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY}
       - NODE_ENV=production
     volumes:
       - ./appdata:/app/data    # app config / sidecar storage
       - /mnt/user/media/audiobooks:/audiobooks # map your audiobooks share
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4033/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     # If you rely on ffmpeg for embedding covers/metadata, ensure the image
     # contains ffmpeg or mount a host ffmpeg binary into the container.

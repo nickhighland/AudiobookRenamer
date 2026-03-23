@@ -15,17 +15,24 @@ OPENAI_API_KEY="sk-..." GOOGLE_BOOKS_API_KEY="..." docker compose -f docker-comp
 
 Notes:
 - The example maps `/mnt/user/media/audiobooks` to `/audiobooks` inside the container — update to match your shares.
-- Port `3000` is used in the example. Change it if your build uses a different port.
+- Port `4033` is used in the example (this matches the API container default).
 - If your workflow uses ffmpeg for embedding covers/metadata, ensure the Docker image includes `ffmpeg` or mount a host ffmpeg binary into the container.
 
 2) Community Applications template
 
 Import the provided `docker/unraid/unraid-template.xml` into Community Applications (Advanced → Import Template) or use it as reference to create a new container via the UI.
 
+Template improvements included:
+- Uses fixed image tag `nickhighland/audiobookrenamer:0.1.1` (you can change to `:latest` later if you prefer).
+- Sets correct default WebUI/API port (`4033`).
+- Marks `OPENAI_API_KEY` as required and masked.
+- Includes advanced environment options: `GOOGLE_BOOKS_API_KEY`, `PORT`, `NODE_ENV`, `TZ`.
+- Includes project/support metadata for easier maintenance.
+
 Key settings to configure in the Unraid UI:
-- Repository: `nickhighland/audiobookrenamer`
+- Repository: `nickhighland/audiobookrenamer:0.1.1` (recommended) or `nickhighland/audiobookrenamer:latest`
 - Network Type: `bridge` (or host if you prefer)
-- Host Ports: map host `3000` → container `3000` (or whichever port your API listens on)
+- Host Ports: map host `4033` → container `4033` (or keep container `4033` and use another host port)
 - Volumes: map an AppData path (e.g., `/mnt/user/appdata/audiobookrenamer` → `/app/data`) and your audiobooks share (e.g., `/mnt/user/media/audiobooks` → `/audiobooks`)
 - Environment Variables: set `OPENAI_API_KEY`, optionally `GOOGLE_BOOKS_API_KEY` and any provider keys you use.
 
@@ -35,5 +42,4 @@ Troubleshooting & tips
 - Logs: check container logs in Unraid (Docker → Logs) to diagnose startup problems.
 
 If you want, I can:
-- Add a minimal healthcheck to the Docker image and the compose file.
 - Add a small verification endpoint to confirm embedding capability and write a UI button to call it from the desktop app.

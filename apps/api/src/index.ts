@@ -77,6 +77,14 @@ app.get("/health", (_req: Request, res: Response) => {
   res.json({ ok: true, service: "audiobook-organizer-api" });
 });
 
+app.get("/", (_req: Request, res: Response) => {
+  res.json({
+    ok: true,
+    service: "audiobook-organizer-api",
+    endpoints: ["/health", "/scan", "/organize", "/manual-review/apply", "/metadata/search"],
+  });
+});
+
 app.post("/scan", async (req: Request, res: Response) => {
   try {
     const inputDir = String(req.body?.inputDir ?? "");

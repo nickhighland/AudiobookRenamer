@@ -1,43 +1,29 @@
 <?xml version="1.0"?>
-<Container templateVersion="1">
+<Container version="2">
   <Name>AudiobookRenamer</Name>
-  <Repository>nickhighland/audiobookrenamer</Repository>
-  <Registry>docker.io</Registry>
+  <Repository>nickhighland/audiobookrenamer:0.1.1</Repository>
+  <Registry>https://hub.docker.com/r/nickhighland/audiobookrenamer</Registry>
   <Network>bridge</Network>
-  <MyIP></MyIP>
-  <Shell>bash</Shell>
-  <Config>
-    <Variable>
-      <Key>OPENAI_API_KEY</Key>
-      <Mode>env</Mode>
-      <Default></Default>
-      <Description>OpenAI API key for identification/GPT features</Description>
-    </Variable>
-    <Variable>
-      <Key>GOOGLE_BOOKS_API_KEY</Key>
-      <Mode>env</Mode>
-      <Default></Default>
-      <Description>Google Books API key (optional)</Description>
-    </Variable>
-  </Config>
-  <Ports>
-    <Port>
-      <Host>3000</Host>
-      <Container>3000</Container>
-      <Protocol>tcp</Protocol>
-    </Port>
-  </Ports>
-  <Volumes>
-    <Volume>
-      <HostDir>/mnt/user/appdata/audiobookrenamer</HostDir>
-      <ContainerDir>/app/data</ContainerDir>
-      <Description>App data / sidecar metadata</Description>
-    </Volume>
-    <Volume>
-      <HostDir>/mnt/user/media/audiobooks</HostDir>
-      <ContainerDir>/audiobooks</ContainerDir>
-      <Description>Audio files library</Description>
-    </Volume>
-  </Volumes>
-  <ExtraParameters></ExtraParameters>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/nickhighland/AudiobookRenamer/issues</Support>
+  <Project>https://github.com/nickhighland/AudiobookRenamer</Project>
+  <Overview>Organize and rename audiobook files using metadata providers and AI identification.</Overview>
+  <Category>Tools:</Category>
+  <WebUI>http://[IP]:[PORT:4033]/health</WebUI>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+
+  <Config Name="WebUI Port" Target="4033" Default="4033" Mode="tcp" Description="Host port for API/Web UI" Type="Port" Display="always" Required="true" Mask="false">4033</Config>
+  <Config Name="AppData" Target="/app/data" Default="/mnt/user/appdata/audiobookrenamer" Mode="rw" Description="Persistent app data and sidecar metadata" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/audiobookrenamer</Config>
+  <Config Name="Audiobooks Library" Target="/audiobooks" Default="/mnt/user/media/audiobooks" Mode="rw" Description="Audiobooks share to organize" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/audiobooks</Config>
+
+  <Config Name="OPENAI_API_KEY" Target="OPENAI_API_KEY" Default="" Mode="" Description="Required: OpenAI API key for identification/GPT features" Type="Variable" Display="always" Required="true" Mask="true"></Config>
+  <Config Name="GOOGLE_BOOKS_API_KEY" Target="GOOGLE_BOOKS_API_KEY" Default="" Mode="" Description="Optional: Google Books API key for metadata lookup" Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+  <Config Name="PORT" Target="PORT" Default="4033" Mode="" Description="Container API port (leave as 4033 unless custom image config)" Type="Variable" Display="advanced" Required="false" Mask="false">4033</Config>
+  <Config Name="NODE_ENV" Target="NODE_ENV" Default="production" Mode="" Description="Node environment" Type="Variable" Display="advanced" Required="false" Mask="false">production</Config>
+  <Config Name="TZ" Target="TZ" Default="America/Chicago" Mode="" Description="Timezone" Type="Variable" Display="advanced" Required="false" Mask="false">America/Chicago</Config>
 </Container>
