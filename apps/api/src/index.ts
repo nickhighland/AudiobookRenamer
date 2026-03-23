@@ -255,8 +255,14 @@ app.post("/organize/stream", async (req: Request, res: Response) => {
   };
 
   let cancelled = false;
-  req.on("close", () => {
+  req.on("aborted", () => {
     cancelled = true;
+  });
+  res.on("close", () => {
+    // Treat as cancellation only when the response did not finish normally.
+    if (!res.writableEnded) {
+      cancelled = true;
+    }
   });
 
   try {
