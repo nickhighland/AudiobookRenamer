@@ -24,9 +24,62 @@ const prevReviewBtn = $("prevReviewBtn");
 const nextReviewBtn = $("nextReviewBtn");
 const saveReviewDecisionBtn = $("saveReviewDecisionBtn");
 
+// Modal elements
+const settingsBtn = $("settingsBtn");
+const settingsModal = $("settingsModal");
+const manualReviewModal = $("manualReviewModal");
+
 const SETTINGS_KEY = "aon.web.settings.v1";
 
+// Modal and Tab Management
+function showModal(modal) {
+  modal.classList.add("active");
+  document.body.style.overflow = "hidden";
+}
+
+function hideModal(modal) {
+  modal.classList.remove("active");
+  document.body.style.overflow = "";
+}
+
+function setupModalHandlers(modal) {
+  const closeButtons = modal.querySelectorAll(".close-btn, .close-btn-alt");
+  const overlay = modal.querySelector(".modal-overlay");
+  
+  closeButtons.forEach(btn => {
+    btn.addEventListener("click", () => hideModal(modal));
+  });
+  
+  if (overlay) {
+    overlay.addEventListener("click", () => hideModal(modal));
+  }
+}
+
+setupModalHandlers(settingsModal);
+setupModalHandlers(manualReviewModal);
+
+settingsBtn.addEventListener("click", () => showModal(settingsModal));
+
+// Tab switching
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const tabName = btn.dataset.tab;
+    
+    // Remove active class from all tabs and contents
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+    
+    // Add active class to clicked tab and corresponding content
+    btn.classList.add("active");
+    const content = $(`tab-${tabName}`);
+    if (content) {
+      content.classList.add("active");
+    }
+  });
+});
+
 let activeOrganizeController = null;
+let organizeActions = [];
 
 let activeTemplateInput = namingTemplateInput;
 const reviewState = {
@@ -88,22 +141,80 @@ function currentReviewItem() {
 function renderReviewItem() {
   const item = currentReviewItem();
   if (!item) {
-    reviewSourceEl.value = "";
-    reviewDestinationEl.value = "";
-    reviewReasonEl.value = "";
-    reviewPositionEl.value = "0/0";
+    reviewSourceEl.textContent = "";
+    reviewDestinationEl.textContent = "";
+    reviewReasonEl.textContent = "";
+    reviewPositionEl.textContent = "0/0";
     reviewCustomDestinationEl.value = "";
+    $("reviewMetadata").innerHTML = "";
     return;
   }
 
-  reviewSourceEl.value = item.source || "";
-  reviewDestinationEl.value = item.proposedDestination || "";
-  reviewReasonEl.value = item.reason || "";
-  reviewPositionEl.value = `${reviewState.index + 1}/${reviewState.items.length}`;
+  reviewSourceEl.textContent = item.source || "";
+  reviewDestinationEl.textContent = item.proposedDestination || "";
+  reviewReasonEl.textContent = item.reason || "";
+  reviewPositionEl.textContent = `${reviewState.index + 1} of ${reviewState.items.length}`;
+
+  // Render metadata beautifully
+  const metadata = item.metadata;
+  if (metadata) {
+    const metadataHTML = `
+      <div class="metadata-row">
+        <span class="metadata-label">Title:</span>
+        <span class="metadata-value">${escapeHtml(metadata.title || "—")}</span>
+      </div>
+      ${metadata.authors ? `<div class="metadata-row">
+        <span class="metadata-label">Authors:</span>
+        <span class="metadata-value">${escapeHtml(metadata.authors.join(", "))}</span>
+      </div>` : ""}
+      ${metadata.narrators ? `<div class="metadata-row">
+        <span class="metadata-label">Narrators:</span>
+        <span class="metadata-value">${escapeHtml(metadata.narrators.join(", "))}</span>
+      </div>` : ""}
+      ${metadata.series ? `<div class="metadata-row">
+        <span class="metadata-label">Series:</span>
+        <span class="metadata-value">${escapeHtml(metadata.series)}</span>
+      </div>` : ""}
+      ${metadata.publishedYear ? `<div class="metadata-row">
+        <span class="metadata-label">Year:</span>
+        <span class="metadata-value">${escapeHtml(metadata.publishedYear)}</span>
+      </div>` : ""}
+      ${metadata.genres ? `<div class="metadata-row">
+        <span class="metadata-label">Genres:</span>
+        <span class="metadata-value">${escapeHtml(metadata.genres.join(", "))}</span>
+      </div>` : ""}
+      ${metadata.isbn ? `<div class="metadata-row">
+        <span class="metadata-label">ISBN:</span>
+        <span class="metadata-value">${escapeHtml(metadata.isbn)}</span>
+      </div>` : ""}
+      ${metadata.description ? `<div class="metadata-row" style="grid-column: 1 / -1;">
+        <span class="metadata-label">Description:</span>
+        <span class="metadata-value">${escapeHtml(metadata.description)}</span>
+      </div>` : ""}
+    `;
+    $("reviewMetadata").innerHTML = metadataHTML;
+  }
 
   const saved = reviewState.decisions.get(item.source);
   reviewDecisionActionEl.value = saved?.action || "approve";
   reviewCustomDestinationEl.value = saved?.destination || "";
+  
+  // Show the modal when rendering an item
+  if (reviewState.items.length > 0) {
+    showModal(manualReviewModal);
+  }
+}
+
+function escapeHtml(text) {
+  if (!text) return "";
+  const map = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  };
+  return text.replace(/[&<>"']/g, m => map[m]);
 }
 
 function saveCurrentDecision() {
@@ -140,6 +251,103 @@ async function loadReviewFile(path) {
     setReviewStatus(`Loaded ${reviewState.items.length} review item(s).`);
   }
   renderReviewItem();
+}
+
+// Folder hierarchy rendering
+function buildScanTree(files) {
+  const tree = {};
+  
+  if (!Array.isArray(files)) return tree;
+  
+  files.forEach(file => {
+    const author = file.guessedAuthor || "Unknown Author";
+    const title = file.guessedTitle || "Unknown Title";
+    
+    if (!tree[author]) tree[author] = {};
+    if (!tree[author][title]) tree[author][title] = [];
+    tree[author][title].push(file);
+  });
+  
+  return tree;
+}
+
+function renderScanTree(files) {
+  const container = $("scanTree");
+  const tree = buildScanTree(files);
+  
+  if (!files || files.length === 0) {
+    container.innerHTML = '<p class="placeholder">Run a scan to see files grouped by detected author/title</p>';
+    $("scanCount").textContent = "0 files";
+    return;
+  }
+  
+  let html = '';
+  for (const author in tree) {
+    html += `<div class="tree-item"><div class="tree-item-name">📁 ${escapeHtml(author)}</div>`;
+    for (const title in tree[author]) {
+      const items = tree[author][title];
+      html += `<div class="tree-item" style="margin-left: 24px"><div class="tree-item-name">📖 ${escapeHtml(title)} (${items.length})</div>`;
+      for (const file of items) {
+        html += `<div class="tree-item" style="margin-left: 40px"><span class="tree-item-name">📄 ${escapeHtml(file.fileName)}</span></div>`;
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+  
+  container.innerHTML = html;
+  $("scanCount").textContent = `${files.length} files`;
+}
+
+function buildOrganizeTree(actions) {
+  const tree = {};
+  
+  if (!Array.isArray(actions)) return tree;
+  
+  actions.forEach(action => {
+    const dest = action.destination || "Skipped";
+    const source = action.source || "Unknown";
+    
+    if (!tree[dest]) tree[dest] = [];
+    tree[dest].push({ source, status: action.status || 'pending', reason: action.reason });
+  });
+  
+  return tree;
+}
+
+function renderOrganizeTree(actions) {
+  const container = $("organizeTree");
+  const tree = buildOrganizeTree(actions);
+  
+  if (!actions || actions.length === 0) {
+    container.innerHTML = '<p class="placeholder">Organize results will appear here</p>';
+    $("organizeCount").textContent = "0 actions";
+    return;
+  }
+  
+  let html = '';
+  let count = 0;
+  
+  for (const dest in tree) {
+    const items = tree[dest];
+    const statusIcons = {
+      "moved": "✓",
+      "skipped": "◯",
+      "manual_review": "❓",
+      "pending": "⋯"
+    };
+    
+    html += `<div class="tree-item"><div class="tree-item-name">📁 ${escapeHtml(dest.split("/").pop() || dest)}</div>`;
+    for (const item of items) {
+      const icon = statusIcons[item.status] || "•";
+      html += `<div class="tree-item" style="margin-left: 24px"><span class="tree-item-name">${icon} ${escapeHtml(item.source.split("/").pop() || item.source)}</span></div>`;
+      count++;
+    }
+    html += '</div>';
+  }
+  
+  container.innerHTML = html;
+  $("organizeCount").textContent = `${count} actions`;
 }
 
 async function applyReviewDecisions() {
@@ -333,6 +541,7 @@ function buildBasePayload() {
 }
 
 async function organizeWithRealtime(payload, signal) {
+  organizeActions = [];
   const response = await fetch("/organize/stream", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -343,6 +552,10 @@ async function organizeWithRealtime(payload, signal) {
   if (!response.ok || !response.body) {
     const fallback = await postJson("/organize", payload);
     appendOutput("Organize Result", fallback);
+    if (fallback.actions) {
+      organizeActions = fallback.actions;
+      renderOrganizeTree(organizeActions);
+    }
     return;
   }
 
@@ -365,6 +578,10 @@ async function organizeWithRealtime(payload, signal) {
           const event = JSON.parse(line);
           if (event.type === "result") {
             appendOutput("Organize Result", event.result);
+            if (event.result && event.result.actions) {
+              organizeActions = event.result.actions;
+              renderOrganizeTree(organizeActions);
+            }
             setRunStatus("Completed.");
             loadReviewFile("")
               .then(() => appendOutput("Manual Review", "Loaded latest live queue"))
@@ -372,6 +589,26 @@ async function organizeWithRealtime(payload, signal) {
           } else if (event.type === "error") {
             appendOutput("Organize Error", event.message ?? event);
             setRunStatus("Error.");
+          } else if (event.type === "item_completed") {
+            // Real-time update to right panel as items complete
+            const action = {
+              source: event.source || "",
+              destination: event.destination || "",
+              status: event.status || "pending",
+              reason: event.message,
+            };
+            // Check if this action already exists and update it, or add it
+            const existingIdx = organizeActions.findIndex(a => a.source === action.source);
+            if (existingIdx >= 0) {
+              organizeActions[existingIdx] = { ...organizeActions[existingIdx], ...action };
+            } else {
+              organizeActions.push(action);
+            }
+            renderOrganizeTree(organizeActions);
+            const progress = event.total && event.index ? `(${event.index}/${event.total}) ` : "";
+            const message = event.message || "Item processed.";
+            appendOutput("Organize Progress", `${progress}${message}`);
+            setRunStatus(`${progress}${message}`);
           } else if (event.type === "manual_review_item") {
             const incoming = event.manualReviewItem;
             if (incoming && incoming.source) {
@@ -382,9 +619,23 @@ async function organizeWithRealtime(payload, signal) {
                   reviewState.index = 0;
                 }
                 renderReviewItem();
-                setReviewStatus(`Live queue updated: ${reviewState.items.length} item(s).`);
+                setReviewStatus(`Live queue: ${reviewState.items.length} item(s)`);
               }
             }
+            // Still add to organize actions tree
+            const action = {
+              source: event.source || "",
+              destination: event.destination || "",
+              status: event.status || "manual_review",
+              reason: event.message,
+            };
+            const existingIdx = organizeActions.findIndex(a => a.source === action.source);
+            if (existingIdx >= 0) {
+              organizeActions[existingIdx] = { ...organizeActions[existingIdx], ...action };
+            } else {
+              organizeActions.push(action);
+            }
+            renderOrganizeTree(organizeActions);
             const progress = event.total && event.index ? `(${event.index}/${event.total}) ` : "";
             const message = event.message || "Manual review item queued.";
             appendOutput("Organize Progress", `${progress}${message}`);
@@ -471,6 +722,7 @@ $("scanBtn").addEventListener("click", async () => {
       recursive: $("recursive").checked,
     });
     appendOutput("Scan Result", result);
+    renderScanTree(result.files || []);
   } catch (error) {
     appendOutput("Scan Error", String(error));
   }
@@ -488,13 +740,16 @@ organizeBtn.addEventListener("click", async () => {
     organizeBtn.textContent = "Running...";
     stopOrganizeBtn.disabled = false;
     activeOrganizeController = new AbortController();
+    organizeActions = [];
     reviewState.items = [];
     reviewState.index = 0;
     reviewState.decisions = new Map();
     reviewState.reviewFilePath = "";
     renderReviewItem();
-    setReviewStatus("Live review queue waiting for low-certainty items...");
+    setReviewStatus("Waiting for low-certainty items...");
     setRunStatus("Starting organizer...");
+    $("tab-organize").textContent = "";
+    renderOrganizeTree([]);
     await saveSettings();
     await organizeWithRealtime(payload, activeOrganizeController.signal);
   } catch (error) {
@@ -529,8 +784,14 @@ $("metadataSearchBtn").addEventListener("click", async () => {
     const result = await postJson("/metadata/search", {
       query,
       providers: selectedProviders(),
+      providerApiKeys: {
+        googleBooksApiKey: $("googleBooksApiKey").value.trim() || undefined,
+      },
     });
     appendOutput("Metadata Search Result", result);
+    if (result?.diagnostics?.failedProviders > 0) {
+      appendOutput("Metadata Provider Diagnostics", result.diagnostics.providerFailures);
+    }
   } catch (error) {
     appendOutput("Metadata Search Error", String(error));
   }
@@ -545,7 +806,12 @@ refreshModelsBtn.addEventListener("click", () => {
 });
 
 saveSettingsBtn.addEventListener("click", () => {
-  saveSettings().catch((error) => appendOutput("Settings Error", String(error)));
+  saveSettings()
+    .then(() => {
+      hideModal(settingsModal);
+      appendOutput("Settings", "Settings saved successfully.");
+    })
+    .catch((error) => appendOutput("Settings Error", String(error)));
 });
 
 loadReviewBtn.addEventListener("click", async () => {

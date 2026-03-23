@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { DEFAULT_BOOK_FOLDER_TEMPLATE, DEFAULT_NAMING_TEMPLATE } from "./defaults.js";
 import { embedCoverInAudioIfPossible, embedMetadataInAudioIfPossible, writeCoverImage } from "./cover.js";
-import { createProviders } from "./metadata/providers.js";
+import { createProviders, toProviderFailure } from "./metadata/providers.js";
 import { buildFolderRelativePath, buildOutputRelativePath } from "./naming.js";
 import { OpenAiIdentifier } from "./openaiIdentifier.js";
 import { scanAudiobookFiles } from "./scanner.js";
@@ -290,14 +290,17 @@ export async function organizeAudiobooks(
           };
           break;
         }
-      } catch {
-        warnings.push(`Metadata lookup failed for provider ${provider.name} on ${candidate.relativePath}`);
+      } catch (error: unknown) {
+        const failure = toProviderFailure(provider.name, identity.title, error);
+        warnings.push(
+          `Metadata lookup failed for provider ${provider.name} on ${candidate.relativePath}: ${failure.message}`,
+        );
         onProgress?.({
           type: "warning",
           index: idx + 1,
           total: candidates.length,
           source: candidate.relativePath,
-          message: `Metadata lookup failed: ${provider.name}`,
+          message: `Metadata lookup failed: ${provider.name} (${failure.message})`,
         });
       }
     }

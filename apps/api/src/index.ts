@@ -10,7 +10,14 @@ import { dirname, resolve } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import fs from "node:fs/promises";
 
-import { applyManualReview, applyManualReviewItems, listOpenAiModels, organizeAudiobooks, scanAudiobookFiles, searchMetadata } from "@aon/core";
+import {
+  applyManualReview,
+  applyManualReviewItems,
+  listOpenAiModels,
+  organizeAudiobooks,
+  scanAudiobookFiles,
+  searchMetadataWithDiagnostics,
+} from "@aon/core";
 import type { ManualReviewItem } from "@aon/core";
 
 const app = express();
@@ -131,6 +138,11 @@ const loadManualReviewSchema = z.object({
 const metadataSearchSchema = z.object({
   query: z.string().min(1),
   providers: z.array(z.enum(["librivox", "openlibrary", "googlebooks"])).optional(),
+  providerApiKeys: z
+    .object({
+      googleBooksApiKey: z.string().optional(),
+    })
+    .optional(),
 });
 
 const modelListSchema = z.object({
@@ -140,6 +152,11 @@ const modelListSchema = z.object({
 const settingsSchema = z.object({
   settings: z.record(z.string(), z.unknown()),
 });
+
+function resolveGoogleBooksApiKey(input?: { googleBooksApiKey?: string }): string | undefined {
+  const key = input?.googleBooksApiKey?.trim() || process.env.GOOGLE_BOOKS_API_KEY?.trim();
+  return key || undefined;
+}
 
 app.get("/health", (_req: Request, res: Response) => {
   res.json({ ok: true, service: "audiobook-organizer-api" });
@@ -238,7 +255,9 @@ app.post("/organize", async (req: Request, res: Response) => {
         dryRun: parsed.dryRun,
         overwrite: parsed.overwrite,
         metadataProviderOrder: parsed.metadataProviderOrder,
-        providerApiKeys: parsed.providerApiKeys,
+        providerApiKeys: {
+          googleBooksApiKey: resolveGoogleBooksApiKey(parsed.providerApiKeys),
+        },
         openAiModel: parsed.openAiModel,
         folderTemplate: parsed.folderTemplate,
         namingTemplate: parsed.namingTemplate,
@@ -311,7 +330,9 @@ app.post("/organize/stream", async (req: Request, res: Response) => {
         dryRun: parsed.dryRun,
         overwrite: parsed.overwrite,
         metadataProviderOrder: parsed.metadataProviderOrder,
-        providerApiKeys: parsed.providerApiKeys,
+        providerApiKeys: {
+          googleBooksApiKey: resolveGoogleBooksApiKey(parsed.providerApiKeys),
+        },
         openAiModel: parsed.openAiModel,
         folderTemplate: parsed.folderTemplate,
         namingTemplate: parsed.namingTemplate,
@@ -427,8 +448,17 @@ app.post("/metadata/search", async (req: Request, res: Response) => {
   try {
     const parsed = metadataSearchSchema.parse(req.body);
     const providers = parsed.providers ?? ["librivox", "openlibrary"];
-    const results = await searchMetadata(parsed.query, providers);
-    return res.json({ count: results.length, results });
+    const search = await searchMetadataWithDiagnostics(parsed.query, providers, {
+      googleBooksApiKey: resolveGoogleBooksApiKey(parsed.providerApiKeys),
+    });
+    return res.json({
+      count: search.results.length,
+      results: search.results,
+      diagnostics: {
+        failedProviders: search.diagnostics.providerFailures.length,
+        providerFailures: search.diagnostics.providerFailures,
+      },
+    });
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.issues });

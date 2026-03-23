@@ -6,10 +6,109 @@ interface ProviderOptions {
   googleBooksApiKey?: string;
 }
 
+export interface MetadataProviderFailure {
+  provider: MetadataProviderName;
+  query: string;
+  message: string;
+  status?: number;
+  code?: string;
+  retryable: boolean;
+}
+
+export interface MetadataSearchDiagnostics {
+  query: string;
+  providerFailures: MetadataProviderFailure[];
+}
+
+export interface MetadataSearchWithDiagnosticsResult {
+  results: MetadataSearchResult[];
+  diagnostics: MetadataSearchDiagnostics;
+}
+
 export interface MetadataProvider {
   readonly name: MetadataProviderName;
   lookup(identity: BookIdentity): Promise<BookMetadata | null>;
   search(query: string): Promise<BookMetadata[]>;
+}
+
+const REQUEST_HEADERS = {
+  "User-Agent": "AudiobookRenamer/0.1 (+https://github.com/nickhighland/AudiobookRenamer)",
+};
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function shouldRetryProviderError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) return false;
+
+  const code = error.code ?? "";
+  if (code === "ECONNABORTED" || code === "ECONNRESET" || code === "ENOTFOUND" || code === "EAI_AGAIN") {
+    return true;
+  }
+
+  const status = error.response?.status;
+  if (!status) return false;
+  return status === 429 || status >= 500;
+}
+
+export function toProviderFailure(provider: MetadataProviderName, query: string, error: unknown): MetadataProviderFailure {
+  if (axios.isAxiosError(error)) {
+    const status = error.response?.status;
+    const code = error.code;
+    const apiMessage =
+      typeof error.response?.data?.error === "string"
+        ? error.response.data.error
+        : typeof error.response?.data?.error?.message === "string"
+          ? error.response.data.error.message
+          : undefined;
+    const reason = apiMessage ?? error.message ?? "Unknown provider error";
+
+    return {
+      provider,
+      query,
+      message: status ? `HTTP ${status}: ${reason}` : reason,
+      status,
+      code,
+      retryable: shouldRetryProviderError(error),
+    };
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    provider,
+    query,
+    message,
+    retryable: false,
+  };
+}
+
+async function getJsonWithRetry(
+  url: string,
+  options?: { timeoutMs?: number; maxRetries?: number; acceptedStatuses?: number[] },
+): Promise<{ data: unknown; status: number }> {
+  const timeoutMs = options?.timeoutMs ?? 12000;
+  const maxRetries = options?.maxRetries ?? 2;
+  const acceptedStatuses = options?.acceptedStatuses ?? [];
+
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    try {
+      const response = await axios.get(url, {
+        timeout: timeoutMs,
+        headers: REQUEST_HEADERS,
+        validateStatus: (status) => (status >= 200 && status < 300) || acceptedStatuses.includes(status),
+      });
+      return { data: response.data, status: response.status };
+    } catch (error) {
+      if (attempt < maxRetries && shouldRetryProviderError(error)) {
+        await sleep(300 * (attempt + 1));
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw new Error("Provider request failed after retries");
 }
 
 export class LibriVoxProvider implements MetadataProvider {
@@ -24,8 +123,13 @@ export class LibriVoxProvider implements MetadataProvider {
     });
 
     const url = `https://librivox.org/api/feed/audiobooks/?${params.toString()}`;
-    const response = await axios.get(url, { timeout: 12000 });
-    const books = Array.isArray(response.data?.books) ? response.data.books : [];
+    const response = await getJsonWithRetry(url, { acceptedStatuses: [404] });
+    if (response.status === 404) {
+      // LibriVox returns 404 for no matches on some title queries.
+      return [];
+    }
+
+    const books = Array.isArray((response.data as any)?.books) ? (response.data as any).books : [];
 
     return books.slice(0, 5).map((best: any) => {
       const authors = Array.isArray(best.authors)
@@ -39,7 +143,9 @@ export class LibriVoxProvider implements MetadataProvider {
       const language =
         Array.isArray(best.language) && best.language.length > 0
           ? best.language[0]?.name ?? best.language[0]
-          : undefined;
+          : typeof best.language === "string"
+            ? best.language
+            : undefined;
 
       return {
         title: best.title ?? query,
@@ -64,8 +170,8 @@ export class OpenLibraryProvider implements MetadataProvider {
   async search(query: string): Promise<BookMetadata[]> {
     const encoded = encodeURIComponent(query.trim());
     const url = `https://openlibrary.org/search.json?q=${encoded}&limit=5`;
-    const response = await axios.get(url, { timeout: 12000 });
-    const docs = Array.isArray(response.data?.docs) ? response.data.docs : [];
+    const response = await getJsonWithRetry(url);
+    const docs = Array.isArray((response.data as any)?.docs) ? (response.data as any).docs : [];
 
     return docs.slice(0, 5).map((best: any) => {
       const year = best.first_publish_year ? String(best.first_publish_year) : undefined;
@@ -108,8 +214,8 @@ export class GoogleBooksProvider implements MetadataProvider {
     const encoded = encodeURIComponent(query.trim());
     const keyParam = this.apiKey ? `&key=${encodeURIComponent(this.apiKey)}` : "";
     const url = `https://www.googleapis.com/books/v1/volumes?q=${encoded}&maxResults=5${keyParam}`;
-    const response = await axios.get(url, { timeout: 12000 });
-    const items = Array.isArray(response.data?.items) ? response.data.items : [];
+    const response = await getJsonWithRetry(url);
+    const items = Array.isArray((response.data as any)?.items) ? (response.data as any).items : [];
 
     return items
       .slice(0, 5)
@@ -160,8 +266,18 @@ export async function searchMetadata(
   providerOrder: MetadataProviderName[],
   options?: ProviderOptions,
 ): Promise<MetadataSearchResult[]> {
+  const detailed = await searchMetadataWithDiagnostics(query, providerOrder, options);
+  return detailed.results;
+}
+
+export async function searchMetadataWithDiagnostics(
+  query: string,
+  providerOrder: MetadataProviderName[],
+  options?: ProviderOptions,
+): Promise<MetadataSearchWithDiagnosticsResult> {
   const providers = createProviders(providerOrder, options);
   const output: MetadataSearchResult[] = [];
+  const providerFailures: MetadataProviderFailure[] = [];
 
   for (const provider of providers) {
     try {
@@ -169,10 +285,16 @@ export async function searchMetadata(
       for (const metadata of results) {
         output.push({ provider: provider.name, metadata });
       }
-    } catch {
-      // Individual provider failures should not break search.
+    } catch (error: unknown) {
+      providerFailures.push(toProviderFailure(provider.name, query, error));
     }
   }
 
-  return output;
+  return {
+    results: output,
+    diagnostics: {
+      query,
+      providerFailures,
+    },
+  };
 }

@@ -17,201 +17,307 @@
     <div class="bg-orb orb-b"></div>
 
     <main class="layout">
-      <header class="hero">
-        <p class="kicker">AudiobookRenamer <span id="buildInfo" class="build-tag">build --</span></p>
-        <h1>Web Console</h1>
-        <p class="sub">Run scan, metadata search, and organize jobs directly from your Unraid browser tab.</p>
+      <!-- TOP BAR -->
+      <header class="top-bar">
+        <div class="hero-compact">
+          <p class="kicker">AudiobookRenamer <span id="buildInfo" class="build-tag">build --</span></p>
+          <h1>Web Console</h1>
+        </div>
+        <div class="top-actions">
+          <button id="settingsBtn" class="btn-icon" title="Settings">⚙️</button>
+          <button id="scanBtn" class="primary">Scan</button>
+        </div>
       </header>
 
-      <section class="card">
-        <h2>Paths</h2>
-        <div class="grid two">
-          <label>
-            Input Directory
-            <input id="inputDir" placeholder="/audiobooks/incoming" />
-          </label>
-          <label>
-            Output Directory
-            <input id="outputDir" placeholder="/audiobooks/organized" />
-          </label>
+      <!-- MAIN CONTENT AREA -->
+      <div class="workspace">
+        <!-- LEFT PANEL: SCAN RESULTS HIERARCHY -->
+        <div class="panel panel-left">
+          <div class="panel-header">
+            <h3>Scan Results</h3>
+            <span class="badge" id="scanCount">0 files</span>
+          </div>
+          <div class="tree-container" id="scanTree">
+            <p class="placeholder">Run a scan to see files grouped by detected author/title</p>
+          </div>
         </div>
-      </section>
 
-      <section class="card">
-        <h2>Organization Options</h2>
-        <div class="grid three">
-          <label>
-            Naming Template
-            <input id="namingTemplate" value="{author} - {title}" />
-          </label>
-          <label>
-            Folder Template
-            <input id="folderTemplate" value="{author}/{series}/{title}" />
-          </label>
-          <label>
-            OpenAI Model
-            <div class="inline-row">
-              <select id="openAiModel">
-                <option value="gpt-5-mini" selected>gpt-5-mini</option>
-              </select>
-              <button type="button" id="refreshModelsBtn" class="secondary small">Refresh Models</button>
+        <!-- CENTER: MAIN CONTROLS & OUTPUT -->
+        <div class="panel panel-center">
+          <div class="tabs">
+            <button class="tab-btn active" data-tab="organize">Organize</button>
+            <button class="tab-btn" data-tab="search">Metadata Search</button>
+            <button class="tab-btn" data-tab="log">Log</button>
+          </div>
+
+          <!-- ORGANIZE TAB -->
+          <div class="tab-content active" id="tab-organize">
+            <div class="organize-controls">
+              <div class="control-group">
+                <label>Status</label>
+                <p id="runStatus" class="status-text">Ready</p>
+              </div>
+              <div class="control-group inline">
+                <button id="organizeBtn" class="primary">Run Organize</button>
+                <button id="stopOrganizeBtn" class="danger" disabled>Stop</button>
+              </div>
             </div>
-          </label>
-        </div>
-
-        <div class="template-tools">
-          <p>Template Placeholders (click to insert)</p>
-          <div class="token-grid" id="tokenGrid">
-            <button type="button" class="token-btn" data-token="{author}">{author}</button>
-            <button type="button" class="token-btn" data-token="{title}">{title}</button>
-            <button type="button" class="token-btn" data-token="{series}">{series}</button>
-            <button type="button" class="token-btn" data-token="{seriesNumber}">{seriesNumber}</button>
-            <button type="button" class="token-btn" data-token="{part}">{part}</button>
-            <button type="button" class="token-btn" data-token="{chapter}">{chapter}</button>
-            <button type="button" class="token-btn" data-token="{ext}">{ext}</button>
           </div>
-          <p class="hint">Use placeholders in Naming Template and Folder Template. Empty values are automatically skipped in folder segments.</p>
-          <p class="hint">`{part}` resolves to number-only (for example `1`, not `Part 1`).</p>
-          <p class="hint">Example naming: {author} - {title} - {part}{ext}</p>
-          <p class="hint">Example folder: {author}/{series}/{title}</p>
-        </div>
 
-        <div class="grid three">
-          <label>
-            Conflict Policy
-            <select id="conflictPolicy">
-              <option value="rename_if_high_reliability" selected>rename_if_high_reliability</option>
-              <option value="rename">rename</option>
-              <option value="skip">skip</option>
-              <option value="manual_review">manual_review</option>
-              <option value="merge">merge</option>
-            </select>
-          </label>
-          <label>
-            Reliability Threshold
-            <input id="highReliabilityThreshold" type="number" min="0" max="1" step="0.05" value="0.8" />
-          </label>
-          <label>
-            File Operation
-            <select id="fileOperation">
-              <option value="move" selected>move (delete source after success)</option>
-              <option value="copy">copy (keep source file)</option>
-            </select>
-          </label>
-          <label>
-            OpenAI API Key (optional if env set)
-            <input id="openAiApiKey" type="password" placeholder="sk-..." />
-          </label>
-        </div>
-
-        <div class="grid checks">
-          <label class="check"><input id="recursive" type="checkbox" checked /> Recursive Scan</label>
-          <label class="check"><input id="createBookFolder" type="checkbox" checked /> Create Book Folder</label>
-          <label class="check"><input id="embedCoverInAudio" type="checkbox" checked /> Embed Cover</label>
-          <label class="check"><input id="embedMetadataInAudio" type="checkbox" checked /> Embed Metadata</label>
-          <label class="check"><input id="dryRun" type="checkbox" /> Dry Run</label>
-          <label class="check"><input id="overwrite" type="checkbox" /> Overwrite</label>
-        </div>
-
-        <div class="providers">
-          <p>Metadata Providers</p>
-          <label class="check"><input type="checkbox" class="provider" value="librivox" checked /> LibriVox</label>
-          <label class="check"><input type="checkbox" class="provider" value="openlibrary" checked /> OpenLibrary</label>
-          <label class="check"><input type="checkbox" class="provider" value="googlebooks" /> Google Books</label>
-          <label class="inline">
-            Google Books API Key (optional)
-            <input id="googleBooksApiKey" type="password" placeholder="AIza..." />
-          </label>
-        </div>
-
-        <div class="actions">
-          <button id="scanBtn" class="secondary">Scan</button>
-          <button id="saveSettingsBtn" class="secondary">Save Settings</button>
-          <button id="organizeBtn" class="primary">Run Organize</button>
-          <button id="stopOrganizeBtn" class="danger" disabled>Stop</button>
-        </div>
-        <p id="runStatus" class="hint">Idle.</p>
-      </section>
-
-      <section class="card">
-        <h2>Metadata Search</h2>
-        <div class="grid two">
-          <label>
-            Query
-            <input id="metadataQuery" placeholder="The Hobbit" />
-          </label>
-          <div class="actions inline-actions">
-            <button id="metadataSearchBtn" class="secondary">Search</button>
+          <!-- METADATA SEARCH TAB -->
+          <div class="tab-content" id="tab-search">
+            <div class="grid two">
+              <label>
+                Query
+                <input id="metadataQuery" placeholder="The Hobbit J.R.R. Tolkien" />
+              </label>
+              <div class="actions inline-actions">
+                <button id="metadataSearchBtn" class="secondary">Search</button>
+              </div>
+            </div>
           </div>
-        </div>
-      </section>
 
-      <section class="card output-wrap">
-        <div class="output-head">
-          <h2>Output</h2>
-          <button id="clearOutput" class="secondary small">Clear</button>
-        </div>
-        <pre id="output" class="output">Ready.</pre>
-      </section>
-
-      <section class="card" id="manualReviewSection">
-        <h2>Low Certainty Live Review Queue</h2>
-        <div class="grid two">
-          <label>
-            Review File Path (optional)
-            <input id="reviewFilePath" placeholder="Optional: load a saved manual-review file" />
-          </label>
-          <div class="actions inline-actions">
-            <button id="loadReviewBtn" class="secondary">Refresh Queue / Load File</button>
-            <button id="applyReviewBtn" class="primary">Apply Decisions</button>
+          <!-- LOG TAB -->
+          <div class="tab-content" id="tab-log">
+            <pre id="output" class="output">Ready.</pre>
+            <button id="clearOutput" class="secondary small">Clear Log</button>
           </div>
         </div>
 
-        <p id="reviewStatus" class="hint">Live queue idle.</p>
-
-        <div class="review-panel" id="reviewPanel">
-          <div class="grid two">
-            <label>
-              Source
-              <input id="reviewSource" readonly />
-            </label>
-            <label>
-              Proposed Destination
-              <input id="reviewDestination" readonly />
-            </label>
+        <!-- RIGHT PANEL: ORGANIZE RESULTS HIERARCHY -->
+        <div class="panel panel-right">
+          <div class="panel-header">
+            <h3>Organize Results</h3>
+            <span class="badge" id="organizeCount">0 actions</span>
           </div>
-
-          <label>
-            Reason
-            <input id="reviewReason" readonly />
-          </label>
-
-          <div class="grid three">
-            <label>
-              Decision
-              <select id="reviewDecisionAction">
-                <option value="approve" selected>approve</option>
-                <option value="skip">skip</option>
-                <option value="custom_destination">custom_destination</option>
-              </select>
-            </label>
-            <label>
-              Custom Destination (optional)
-              <input id="reviewCustomDestination" placeholder="/audiobooks/organized/..." />
-            </label>
-            <label>
-              Position
-              <input id="reviewPosition" readonly />
-            </label>
-          </div>
-
-          <div class="actions">
-            <button id="prevReviewBtn" class="secondary">Prev</button>
-            <button id="saveReviewDecisionBtn" class="secondary">Save Decision</button>
-            <button id="nextReviewBtn" class="secondary">Next</button>
+          <div class="tree-container" id="organizeTree">
+            <p class="placeholder">Organize results will appear here</p>
           </div>
         </div>
-      </section>
+      </div>
+
+      <!-- MANUAL REVIEW MODAL -->
+      <div class="modal" id="manualReviewModal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content modal-review">
+          <div class="modal-header">
+            <h2>Low Certainty Review</h2>
+            <button class="close-btn" aria-label="Close">×</button>
+          </div>
+
+          <div class="review-item-display">
+            <div class="review-info">
+              <div class="info-block">
+                <label>Source File</label>
+                <p id="reviewSource" class="source-file"></p>
+              </div>
+              <div class="info-block">
+                <label>Reason</label>
+                <p id="reviewReason"></p>
+              </div>
+            </div>
+
+            <div class="review-proposal">
+              <label>Proposed Metadata</label>
+              <div class="metadata-display" id="reviewMetadata"></div>
+            </div>
+
+            <div class="review-destination">
+              <label>Proposed Destination</label>
+              <p id="reviewDestination" class="destination-path"></p>
+            </div>
+          </div>
+
+          <div class="review-actions-section">
+            <div class="grid two">
+              <label>
+                Decision
+                <select id="reviewDecisionAction">
+                  <option value="approve" selected>Approve</option>
+                  <option value="skip">Skip</option>
+                  <option value="custom_destination">Custom Destination</option>
+                </select>
+              </label>
+              <label>
+                Custom Destination (if needed)
+                <input id="reviewCustomDestination" type="text" placeholder="/path/to/custom/destination" />
+              </label>
+            </div>
+          </div>
+
+          <div class="review-nav">
+            <div class="position-info">
+              <span id="reviewPosition">1 of 5</span>
+            </div>
+            <div class="review-buttons">
+              <button id="prevReviewBtn" class="secondary">← Prev</button>
+              <button id="saveReviewDecisionBtn" class="secondary">Save Decision</button>
+              <button id="nextReviewBtn" class="secondary">Next →</button>
+            </div>
+            <div class="apply-section">
+              <p id="reviewStatus" class="status-text">Queue: 0 items</p>
+              <button id="applyReviewBtn" class="primary">Apply All Decisions</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SETTINGS MODAL -->
+      <div class="modal" id="settingsModal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content modal-settings">
+          <div class="modal-header">
+            <h2>Settings</h2>
+            <button class="close-btn" aria-label="Close">×</button>
+          </div>
+
+          <div class="settings-scroll">
+            <!-- PATHS -->
+            <section class="settings-section">
+              <h3>Paths</h3>
+              <div class="grid two">
+                <label>
+                  Input Directory
+                  <input id="inputDir" placeholder="/audiobooks/incoming" />
+                </label>
+                <label>
+                  Output Directory
+                  <input id="outputDir" placeholder="/audiobooks/organized" />
+                </label>
+              </div>
+            </section>
+
+            <!-- NAMING & FOLDERS -->
+            <section class="settings-section">
+              <h3>Naming & Organization</h3>
+              <div class="grid two">
+                <label>
+                  Naming Template
+                  <input id="namingTemplate" value="{author} - {title}" />
+                </label>
+                <label>
+                  Folder Template
+                  <input id="folderTemplate" value="{author}/{series}/{title}" />
+                </label>
+              </div>
+
+              <div class="template-tools">
+                <p class="small-label">Template Placeholders</p>
+                <div class="token-grid" id="tokenGrid">
+                  <button type="button" class="token-btn" data-token="{author}">{author}</button>
+                  <button type="button" class="token-btn" data-token="{title}">{title}</button>
+                  <button type="button" class="token-btn" data-token="{series}">{series}</button>
+                  <button type="button" class="token-btn" data-token="{seriesNumber}">{seriesNumber}</button>
+                  <button type="button" class="token-btn" data-token="{part}">{part}</button>
+                  <button type="button" class="token-btn" data-token="{chapter}">{chapter}</button>
+                  <button type="button" class="token-btn" data-token="{ext}">{ext}</button>
+                </div>
+                <p class="hint">Empty values are automatically skipped in folder segments.</p>
+              </div>
+            </section>
+
+            <!-- AI & METADATA -->
+            <section class="settings-section">
+              <h3>AI & Metadata</h3>
+              <div class="grid two">
+                <label>
+                  OpenAI Model
+                  <div class="inline-row">
+                    <select id="openAiModel">
+                      <option value="gpt-5-mini" selected>gpt-5-mini</option>
+                    </select>
+                    <button type="button" id="refreshModelsBtn" class="secondary small">Refresh</button>
+                  </div>
+                </label>
+                <label>
+                  OpenAI API Key
+                  <input id="openAiApiKey" type="password" placeholder="sk-..." />
+                </label>
+              </div>
+
+              <div class="grid two">
+                <label>
+                  Metadata Providers
+                  <div class="provider-checks">
+                    <label class="check"><input type="checkbox" class="provider" value="librivox" checked /> LibriVox</label>
+                    <label class="check"><input type="checkbox" class="provider" value="openlibrary" checked /> OpenLibrary</label>
+                    <label class="check"><input type="checkbox" class="provider" value="googlebooks" /> Google Books</label>
+                  </div>
+                </label>
+                <label>
+                  Google Books API Key
+                  <input id="googleBooksApiKey" type="password" placeholder="AIza..." />
+                </label>
+              </div>
+            </section>
+
+            <!-- CONFLICT HANDLING -->
+            <section class="settings-section">
+              <h3>Conflict Handling</h3>
+              <div class="grid two">
+                <label>
+                  Conflict Policy
+                  <select id="conflictPolicy">
+                    <option value="rename_if_high_reliability" selected>rename_if_high_reliability</option>
+                    <option value="rename">rename</option>
+                    <option value="skip">skip</option>
+                    <option value="manual_review">manual_review</option>
+                    <option value="merge">merge</option>
+                  </select>
+                </label>
+                <label>
+                  Reliability Threshold
+                  <input id="highReliabilityThreshold" type="number" min="0" max="1" step="0.05" value="0.8" />
+                </label>
+              </div>
+            </section>
+
+            <!-- FILE OPERATION -->
+            <section class="settings-section">
+              <h3>File Operation</h3>
+              <div class="grid two">
+                <label>
+                  Operation Mode
+                  <select id="fileOperation">
+                    <option value="move" selected>Move (delete source)</option>
+                    <option value="copy">Copy (keep source)</option>
+                  </select>
+                </label>
+              </div>
+            </section>
+
+            <!-- AUDIO EMBEDDING -->
+            <section class="settings-section">
+              <h3>Audio File Options</h3>
+              <div class="grid checks">
+                <label class="check"><input id="recursive" type="checkbox" checked /> Recursive Scan</label>
+                <label class="check"><input id="createBookFolder" type="checkbox" checked /> Create Book Folder</label>
+                <label class="check"><input id="embedCoverInAudio" type="checkbox" checked /> Embed Cover</label>
+                <label class="check"><input id="embedMetadataInAudio" type="checkbox" checked /> Embed Metadata</label>
+                <label class="check"><input id="dryRun" type="checkbox" /> Dry Run</label>
+                <label class="check"><input id="overwrite" type="checkbox" /> Overwrite</label>
+              </div>
+            </section>
+
+            <!-- REVIEW FILE -->
+            <section class="settings-section">
+              <h3>Manual Review</h3>
+              <label>
+                Review File Path (optional)
+                <input id="reviewFilePath" type="text" placeholder="Optional: load a saved manual-review file" />
+              </label>
+              <div class="actions">
+                <button id="loadReviewBtn" class="secondary">Refresh Queue / Load File</button>
+              </div>
+            </section>
+          </div>
+
+          <div class="modal-footer">
+            <button id="saveSettingsBtn" class="primary">Save Settings</button>
+            <button class="secondary close-btn-alt">Close</button>
+          </div>
+        </div>
+      </div>
     </main>
 
     <script src="/app.js" defer></script>
