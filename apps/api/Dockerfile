@@ -14,7 +14,9 @@ RUN npm run build -w @aon/core && npm run build -w @aon/api
 
 FROM node:22-alpine AS runner
 WORKDIR /app
+ARG APP_BUILD=0.1.0
 ENV NODE_ENV=production
+ENV APP_BUILD=${APP_BUILD}
 
 COPY package.json ./package.json
 COPY apps/api/package.json ./apps/api/package.json

@@ -1,6 +1,6 @@
 services:
   audiobookrenamer:
-    image: nickhighland/audiobookrenamer:0.1.8
+    image: nickhighland/audiobookrenamer:0.1.9
     container_name: audiobookrenamer
     restart: unless-stopped
     ports:
