@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<Container templateVersion="1">
+  <Name>AudiobookRenamer</Name>
+  <Repository>nickhighland/audiobookrenamer</Repository>
+  <Registry>docker.io</Registry>
+  <Network>bridge</Network>
+  <MyIP></MyIP>
+  <Shell>bash</Shell>
+  <Config>
+    <Variable>
+      <Key>OPENAI_API_KEY</Key>
+      <Mode>env</Mode>
+      <Default></Default>
+      <Description>OpenAI API key for identification/GPT features</Description>
+    </Variable>
+    <Variable>
+      <Key>GOOGLE_BOOKS_API_KEY</Key>
+      <Mode>env</Mode>
+      <Default></Default>
+      <Description>Google Books API key (optional)</Description>
+    </Variable>
+  </Config>
+  <Ports>
+    <Port>
+      <Host>3000</Host>
+      <Container>3000</Container>
+      <Protocol>tcp</Protocol>
+    </Port>
+  </Ports>
+  <Volumes>
+    <Volume>
+      <HostDir>/mnt/user/appdata/audiobookrenamer</HostDir>
+      <ContainerDir>/app/data</ContainerDir>
+      <Description>App data / sidecar metadata</Description>
+    </Volume>
+    <Volume>
+      <HostDir>/mnt/user/media/audiobooks</HostDir>
+      <ContainerDir>/audiobooks</ContainerDir>
+      <Description>Audio files library</Description>
+    </Volume>
+  </Volumes>
+  <ExtraParameters></ExtraParameters>
+</Container>
