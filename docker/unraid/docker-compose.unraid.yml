@@ -1,6 +1,6 @@
 services:
   audiobookrenamer:
-    image: nickhighland/audiobookrenamer:0.1.13
+    image: nickhighland/audiobookrenamer:0.1.14
     pull_policy: always
     container_name: audiobookrenamer
     restart: unless-stopped

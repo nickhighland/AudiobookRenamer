@@ -14,7 +14,7 @@ RUN npm run build -w @aon/core && npm run build -w @aon/api
 
 FROM node:22-alpine AS runner
 WORKDIR /app
-ARG APP_BUILD=0.1.13
+ARG APP_BUILD=0.1.14
 ENV NODE_ENV=production
 ENV APP_BUILD=${APP_BUILD}
 
