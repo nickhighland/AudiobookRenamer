@@ -54,6 +54,22 @@
           </label>
         </div>
 
+        <div class="template-tools">
+          <p>Template Placeholders (click to insert)</p>
+          <div class="token-grid" id="tokenGrid">
+            <button type="button" class="token-btn" data-token="{author}">{author}</button>
+            <button type="button" class="token-btn" data-token="{title}">{title}</button>
+            <button type="button" class="token-btn" data-token="{series}">{series}</button>
+            <button type="button" class="token-btn" data-token="{seriesNumber}">{seriesNumber}</button>
+            <button type="button" class="token-btn" data-token="{part}">{part}</button>
+            <button type="button" class="token-btn" data-token="{chapter}">{chapter}</button>
+            <button type="button" class="token-btn" data-token="{ext}">{ext}</button>
+          </div>
+          <p class="hint">Use placeholders in Naming Template and Folder Template. Empty values are automatically skipped in folder segments.</p>
+          <p class="hint">Example naming: {author} - {title} - Part {part}{ext}</p>
+          <p class="hint">Example folder: {author}/{series}/{title}</p>
+        </div>
+
         <div class="grid three">
           <label>
             Conflict Policy

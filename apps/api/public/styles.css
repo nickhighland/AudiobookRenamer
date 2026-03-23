@@ -108,6 +108,44 @@ h2 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.template-tools {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(140, 188, 214, 0.22);
+  border-radius: 10px;
+  background: rgba(10, 19, 29, 0.55);
+}
+
+.template-tools p {
+  margin: 0 0 8px;
+  color: var(--muted);
+}
+
+.token-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.token-btn {
+  padding: 7px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(82, 229, 201, 0.45);
+  background: rgba(14, 35, 40, 0.86);
+  color: #b5fff1;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+}
+
+.token-btn:hover {
+  background: rgba(20, 65, 72, 0.92);
+}
+
+.hint {
+  margin-top: 8px;
+  font-size: 0.82rem;
+}
+
 label {
   display: flex;
   flex-direction: column;

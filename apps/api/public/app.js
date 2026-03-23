@@ -1,6 +1,33 @@
 const $ = (id) => document.getElementById(id);
 
 const outputEl = $("output");
+const namingTemplateInput = $("namingTemplate");
+const folderTemplateInput = $("folderTemplate");
+let activeTemplateInput = namingTemplateInput;
+
+function setActiveTemplateInput(inputEl) {
+  activeTemplateInput = inputEl;
+}
+
+function insertTokenIntoInput(inputEl, token) {
+  const start = inputEl.selectionStart ?? inputEl.value.length;
+  const end = inputEl.selectionEnd ?? inputEl.value.length;
+  inputEl.value = `${inputEl.value.slice(0, start)}${token}${inputEl.value.slice(end)}`;
+  const nextPos = start + token.length;
+  inputEl.setSelectionRange(nextPos, nextPos);
+  inputEl.focus();
+}
+
+namingTemplateInput.addEventListener("focus", () => setActiveTemplateInput(namingTemplateInput));
+folderTemplateInput.addEventListener("focus", () => setActiveTemplateInput(folderTemplateInput));
+
+document.querySelectorAll(".token-btn").forEach((button) => {
+  button.addEventListener("click", () => {
+    const token = button.dataset.token;
+    if (!token) return;
+    insertTokenIntoInput(activeTemplateInput || namingTemplateInput, token);
+  });
+});
 
 function selectedProviders() {
   return Array.from(document.querySelectorAll(".provider"))

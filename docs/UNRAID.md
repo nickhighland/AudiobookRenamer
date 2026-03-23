@@ -37,6 +37,19 @@ Key settings to configure in the Unraid UI:
 - Volumes: map an AppData path (e.g., `/mnt/user/appdata/audiobookrenamer` → `/app/data`) and your audiobooks share (e.g., `/mnt/user/media/audiobooks` → `/audiobooks`)
 - Environment Variables: set `OPENAI_API_KEY`, optionally `GOOGLE_BOOKS_API_KEY` and any provider keys you use.
 
+Naming/folder placeholders available in the Web UI:
+- `{author}`
+- `{title}`
+- `{series}`
+- `{seriesNumber}`
+- `{part}`
+- `{chapter}`
+- `{ext}`
+
+Examples:
+- Naming template: `{author} - {title} - Part {part}{ext}`
+- Folder template: `{author}/{series}/{title}`
+
 Troubleshooting & tips
 - If embedding fails due to missing `ffmpeg`, either rebuild the image to include `ffmpeg` or run a helper container with `ffmpeg` and share files via a common mount.
 - Permissions: ensure the container user has read/write access to the mapped audio share and the `appdata` folder.
