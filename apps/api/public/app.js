@@ -5,6 +5,7 @@ const namingTemplateInput = $("namingTemplate");
 const folderTemplateInput = $("folderTemplate");
 const openAiModelSelect = $("openAiModel");
 const refreshModelsBtn = $("refreshModelsBtn");
+const verifyApiKeysBtn = $("verifyApiKeysBtn");
 const saveSettingsBtn = $("saveSettingsBtn");
 const organizeBtn = $("organizeBtn");
 const stopOrganizeBtn = $("stopOrganizeBtn");
@@ -20,6 +21,13 @@ const reviewDestinationEl = $("reviewDestination");
 const reviewReasonEl = $("reviewReason");
 const reviewDecisionActionEl = $("reviewDecisionAction");
 const reviewCustomDestinationEl = $("reviewCustomDestination");
+const reviewDestinationInputEl = $("reviewDestinationInput");
+const reviewTitleInputEl = $("reviewTitle");
+const reviewAuthorsInputEl = $("reviewAuthors");
+const reviewSeriesInputEl = $("reviewSeries");
+const reviewSeriesSequenceInputEl = $("reviewSeriesSequence");
+const reviewPublishedYearInputEl = $("reviewPublishedYear");
+const reviewMetadataSourceInputEl = $("reviewMetadataSource");
 const reviewPositionEl = $("reviewPosition");
 const prevReviewBtn = $("prevReviewBtn");
 const nextReviewBtn = $("nextReviewBtn");
@@ -220,6 +228,62 @@ function setReviewStatus(text) {
   reviewStatusEl.textContent = text;
 }
 
+function parseCsvList(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function metadataBaseForItem(item) {
+  const metadata = item?.metadata && typeof item.metadata === "object" ? item.metadata : {};
+  return {
+    title: String(metadata.title || ""),
+    authors: Array.isArray(metadata.authors) ? metadata.authors : [],
+    series: typeof metadata.series === "string" ? metadata.series : "",
+    seriesSequence: typeof metadata.seriesSequence === "string" ? metadata.seriesSequence : "",
+    publishedYear: typeof metadata.publishedYear === "string" ? metadata.publishedYear : "",
+    source: typeof metadata.source === "string" && metadata.source.trim() ? metadata.source : "manual-review",
+  };
+}
+
+function metadataOverrideFromInputs(item) {
+  const base = metadataBaseForItem(item);
+  const title = reviewTitleInputEl.value.trim();
+  const authors = parseCsvList(reviewAuthorsInputEl.value);
+  const series = reviewSeriesInputEl.value.trim();
+  const seriesSequence = reviewSeriesSequenceInputEl.value.trim();
+  const publishedYear = reviewPublishedYearInputEl.value.trim();
+  const source = reviewMetadataSourceInputEl.value.trim() || "manual-review";
+
+  const changed =
+    title !== base.title
+    || authors.join("||") !== base.authors.join("||")
+    || series !== base.series
+    || seriesSequence !== base.seriesSequence
+    || publishedYear !== base.publishedYear
+    || source !== base.source;
+
+  if (!changed) {
+    return undefined;
+  }
+
+  if (!title || authors.length === 0) {
+    throw new Error("Metadata overrides require both a title and at least one author.");
+  }
+
+  const metadata = item?.metadata && typeof item.metadata === "object" ? item.metadata : {};
+  return {
+    ...metadata,
+    title,
+    authors,
+    series: series || undefined,
+    seriesSequence: seriesSequence || undefined,
+    publishedYear: publishedYear || undefined,
+    source,
+  };
+}
+
 function currentReviewItem() {
   if (!reviewState.items.length) return null;
   return reviewState.items[reviewState.index] || null;
@@ -233,6 +297,13 @@ function renderReviewItem() {
     reviewReasonEl.textContent = "";
     reviewPositionEl.textContent = "0/0";
     reviewCustomDestinationEl.value = "";
+    reviewDestinationInputEl.value = "";
+    reviewTitleInputEl.value = "";
+    reviewAuthorsInputEl.value = "";
+    reviewSeriesInputEl.value = "";
+    reviewSeriesSequenceInputEl.value = "";
+    reviewPublishedYearInputEl.value = "";
+    reviewMetadataSourceInputEl.value = "";
     $("reviewMetadata").innerHTML = "";
     return;
   }
@@ -280,11 +351,25 @@ function renderReviewItem() {
       </div>` : ""}
     `;
     $("reviewMetadata").innerHTML = metadataHTML;
+  } else {
+    $("reviewMetadata").innerHTML = "";
   }
 
   const saved = reviewState.decisions.get(item.source);
   reviewDecisionActionEl.value = saved?.action || "approve";
   reviewCustomDestinationEl.value = saved?.destination || "";
+  reviewDestinationInputEl.value = saved?.destination || item.proposedDestination || "";
+
+  const base = metadataBaseForItem(item);
+  const override = saved?.metadataOverride;
+  reviewTitleInputEl.value = override?.title || base.title;
+  reviewAuthorsInputEl.value = Array.isArray(override?.authors)
+    ? override.authors.join(", ")
+    : base.authors.join(", ");
+  reviewSeriesInputEl.value = override?.series || base.series;
+  reviewSeriesSequenceInputEl.value = override?.seriesSequence || base.seriesSequence;
+  reviewPublishedYearInputEl.value = override?.publishedYear || base.publishedYear;
+  reviewMetadataSourceInputEl.value = override?.source || base.source;
   
   // Show the modal when rendering an item
   if (reviewState.items.length > 0) {
@@ -306,10 +391,29 @@ function escapeHtml(text) {
 
 function saveCurrentDecision() {
   const item = currentReviewItem();
-  if (!item) return;
+  if (!item) return true;
 
-  const action = reviewDecisionActionEl.value;
-  const destination = reviewCustomDestinationEl.value.trim();
+  const selectedAction = reviewDecisionActionEl.value;
+  const destinationInput = reviewDestinationInputEl.value.trim();
+  const customDestinationInput = reviewCustomDestinationEl.value.trim();
+  const destination = destinationInput || customDestinationInput;
+
+  if (destinationInput) {
+    reviewCustomDestinationEl.value = destinationInput;
+  }
+
+  let metadataOverride;
+  try {
+    metadataOverride = metadataOverrideFromInputs(item);
+  } catch (error) {
+    setReviewStatus(String(error));
+    return false;
+  }
+
+  let action = selectedAction;
+  if (selectedAction !== "skip" && destination && destination !== item.proposedDestination) {
+    action = "custom_destination";
+  }
 
   const decision = {
     source: item.source,
@@ -320,8 +424,13 @@ function saveCurrentDecision() {
     decision.destination = destination;
   }
 
+  if (metadataOverride) {
+    decision.metadataOverride = metadataOverride;
+  }
+
   reviewState.decisions.set(item.source, decision);
   setReviewStatus(`Saved decision for ${item.source}`);
+  return true;
 }
 
 async function loadReviewFile(path) {
@@ -443,7 +552,9 @@ async function applyReviewDecisions() {
     return;
   }
 
-  saveCurrentDecision();
+  if (!saveCurrentDecision()) {
+    return;
+  }
 
   const decisions = reviewState.items.map((item) => {
     return reviewState.decisions.get(item.source) || {
@@ -796,6 +907,32 @@ async function loadOpenAiModels() {
   }
 }
 
+async function verifyApiKeys() {
+  if (!verifyApiKeysBtn) return;
+
+  try {
+    verifyApiKeysBtn.disabled = true;
+    verifyApiKeysBtn.textContent = "Verifying...";
+    const payload = {
+      openAiApiKey: $("openAiApiKey").value.trim() || undefined,
+      googleBooksApiKey: $("googleBooksApiKey").value.trim() || undefined,
+    };
+    const result = await postJson("/api-keys/verify", payload);
+    appendOutput("API Key Verification", result);
+
+    const checks = result?.checks || {};
+    const openaiText = checks.openai?.ok ? `OpenAI OK: ${checks.openai.message}` : `OpenAI FAILED: ${checks.openai?.message || "No key provided."}`;
+    const googleText = checks.googlebooks?.ok ? `Google Books OK: ${checks.googlebooks.message}` : `Google Books FAILED: ${checks.googlebooks?.message || "No key provided."}`;
+    setRunStatus(`${openaiText} | ${googleText}`);
+  } catch (error) {
+    appendOutput("API Key Verification Error", String(error));
+    setRunStatus("API key verification failed.");
+  } finally {
+    verifyApiKeysBtn.disabled = false;
+    verifyApiKeysBtn.textContent = "Verify API Keys";
+  }
+}
+
 $("scanBtn").addEventListener("click", async () => {
   try {
     const inputDir = $("inputDir").value.trim();
@@ -899,6 +1036,12 @@ refreshModelsBtn.addEventListener("click", () => {
   loadOpenAiModels();
 });
 
+if (verifyApiKeysBtn) {
+  verifyApiKeysBtn.addEventListener("click", () => {
+    verifyApiKeys();
+  });
+}
+
 saveSettingsBtn.addEventListener("click", () => {
   saveSettings()
     .then(() => {
@@ -923,14 +1066,14 @@ saveReviewDecisionBtn.addEventListener("click", () => {
 
 prevReviewBtn.addEventListener("click", () => {
   if (!reviewState.items.length) return;
-  saveCurrentDecision();
+  if (!saveCurrentDecision()) return;
   reviewState.index = Math.max(0, reviewState.index - 1);
   renderReviewItem();
 });
 
 nextReviewBtn.addEventListener("click", () => {
   if (!reviewState.items.length) return;
-  saveCurrentDecision();
+  if (!saveCurrentDecision()) return;
   reviewState.index = Math.min(reviewState.items.length - 1, reviewState.index + 1);
   renderReviewItem();
 });

@@ -131,6 +131,39 @@
               <label>Proposed Destination</label>
               <p id="reviewDestination" class="destination-path"></p>
             </div>
+
+            <div class="review-edit-fields">
+              <label>
+                Destination Path Override
+                <input id="reviewDestinationInput" type="text" placeholder="Edit output path if needed" />
+              </label>
+              <div class="grid two">
+                <label>
+                  Title Override
+                  <input id="reviewTitle" type="text" placeholder="Book title" />
+                </label>
+                <label>
+                  Authors Override (comma separated)
+                  <input id="reviewAuthors" type="text" placeholder="Author One, Author Two" />
+                </label>
+                <label>
+                  Series Override
+                  <input id="reviewSeries" type="text" placeholder="Optional series" />
+                </label>
+                <label>
+                  Series Number Override
+                  <input id="reviewSeriesSequence" type="text" placeholder="Optional number" />
+                </label>
+                <label>
+                  Published Year Override
+                  <input id="reviewPublishedYear" type="text" placeholder="Optional year" />
+                </label>
+                <label>
+                  Metadata Source Label
+                  <input id="reviewMetadataSource" type="text" placeholder="manual-review" />
+                </label>
+              </div>
+            </div>
           </div>
 
           <div class="review-actions-section">
@@ -238,6 +271,10 @@
                   OpenAI API Key
                   <input id="openAiApiKey" type="password" placeholder="sk-..." />
                 </label>
+              </div>
+
+              <div class="actions">
+                <button type="button" id="verifyApiKeysBtn" class="secondary">Verify API Keys</button>
               </div>
 
               <div class="grid two">

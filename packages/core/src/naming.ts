@@ -8,6 +8,7 @@ import { NameTemplateContext } from "./types.js";
 const TOKEN_REGEX = /\{([a-zA-Z0-9_]+)\}/g;
 
 const TRIM_SEPARATOR_REGEX = /^\s*[-_.|:]+\s*|\s*[-_.|:]+\s*$/g;
+const SEPARATOR_LITERAL_REGEX = /^[\s\-_.|:]+$/;
 
 function normalizeExt(value: string): string {
   if (!value) return value;
@@ -23,25 +24,59 @@ function tokenValue(ctx: NameTemplateContext, token: keyof NameTemplateContext):
 }
 
 function renderSegmentWithOptionalSeparators(segment: string, ctx: NameTemplateContext): string {
-  let rendered = segment;
+  const parts: Array<{ type: "literal" | "value"; text: string }> = [];
+  let cursor = 0;
 
-  const tokens = [...segment.matchAll(TOKEN_REGEX)].map((m) => m[1] as keyof NameTemplateContext);
-
-  for (const token of tokens) {
-    const placeholder = `{${token}}`;
-    const escaped = placeholder.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const value = tokenValue(ctx, token);
-
-    if (!value) {
-      // Remove adjacent separators if this optional token is empty.
-      rendered = rendered.replace(new RegExp(`\\s*[-_.|:]+\\s*${escaped}`, "g"), " ");
-      rendered = rendered.replace(new RegExp(`${escaped}\\s*[-_.|:]+\\s*`, "g"), " ");
-      rendered = rendered.replace(new RegExp(escaped, "g"), "");
-      continue;
+  for (const match of segment.matchAll(TOKEN_REGEX)) {
+    const start = match.index ?? 0;
+    if (start > cursor) {
+      parts.push({ type: "literal", text: segment.slice(cursor, start) });
     }
 
-    rendered = rendered.replace(new RegExp(escaped, "g"), value);
+    const token = match[1] as keyof NameTemplateContext;
+    parts.push({ type: "value", text: tokenValue(ctx, token) });
+    cursor = start + match[0].length;
   }
+
+  if (cursor < segment.length) {
+    parts.push({ type: "literal", text: segment.slice(cursor) });
+  }
+
+  if (parts.length === 0) {
+    return segment;
+  }
+
+  const hasValueBefore = (index: number): boolean => {
+    for (let i = index - 1; i >= 0; i -= 1) {
+      if (parts[i].type === "value") {
+        return parts[i].text.trim().length > 0;
+      }
+    }
+    return false;
+  };
+
+  const hasValueAfter = (index: number): boolean => {
+    for (let i = index + 1; i < parts.length; i += 1) {
+      if (parts[i].type === "value") {
+        return parts[i].text.trim().length > 0;
+      }
+    }
+    return false;
+  };
+
+  const rendered = parts
+    .flatMap((part, index) => {
+      if (part.type === "value") {
+        return part.text.trim().length > 0 ? [part.text] : [];
+      }
+
+      if (SEPARATOR_LITERAL_REGEX.test(part.text) && (!hasValueBefore(index) || !hasValueAfter(index))) {
+        return [];
+      }
+
+      return [part.text];
+    })
+    .join("");
 
   return rendered.replace(TRIM_SEPARATOR_REGEX, "").replace(/\s{2,}/g, " ").trim();
 }

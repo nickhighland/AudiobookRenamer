@@ -149,6 +149,11 @@ const modelListSchema = z.object({
   openAiApiKey: z.string().optional(),
 });
 
+const verifyApiKeysSchema = z.object({
+  openAiApiKey: z.string().optional(),
+  googleBooksApiKey: z.string().optional(),
+});
+
 const settingsSchema = z.object({
   settings: z.record(z.string(), z.unknown()),
 });
@@ -156,6 +161,24 @@ const settingsSchema = z.object({
 function resolveGoogleBooksApiKey(input?: { googleBooksApiKey?: string }): string | undefined {
   const key = input?.googleBooksApiKey?.trim() || process.env.GOOGLE_BOOKS_API_KEY?.trim();
   return key || undefined;
+}
+
+async function verifyGoogleBooksApiKey(apiKey: string): Promise<void> {
+  const url = new URL("https://www.googleapis.com/books/v1/volumes");
+  url.searchParams.set("q", "intitle:hobbit");
+  url.searchParams.set("maxResults", "1");
+  url.searchParams.set("key", apiKey);
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`Google Books verification failed (${response.status}): ${body || response.statusText}`);
+  }
+
+  const data = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
+  if (data?.error?.message) {
+    throw new Error(`Google Books verification failed: ${data.error.message}`);
+  }
 }
 
 app.get("/health", (_req: Request, res: Response) => {
@@ -181,6 +204,7 @@ app.get("/api", (_req: Request, res: Response) => {
       "/manual-review/apply",
       "/metadata/search",
       "/openai/models",
+      "/api-keys/verify",
     ],
   });
 });
@@ -214,6 +238,67 @@ app.post("/openai/models", async (req: Request, res: Response) => {
 
     const models = await listOpenAiModels(apiKey);
     return res.json({ count: models.length, models });
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.issues });
+    }
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return res.status(500).json({ error: message });
+  }
+});
+
+app.post("/api-keys/verify", async (req: Request, res: Response) => {
+  try {
+    const parsed = verifyApiKeysSchema.parse(req.body ?? {});
+    const openAiApiKey = parsed.openAiApiKey?.trim() || process.env.OPENAI_API_KEY?.trim();
+    const googleBooksApiKey = parsed.googleBooksApiKey?.trim() || process.env.GOOGLE_BOOKS_API_KEY?.trim();
+
+    const checks: {
+      openai: { ok: boolean; message: string };
+      googlebooks: { ok: boolean; message: string };
+    } = {
+      openai: {
+        ok: true,
+        message: "No API key provided (skipped).",
+      },
+      googlebooks: {
+        ok: true,
+        message: "No API key provided (skipped).",
+      },
+    };
+
+    if (openAiApiKey) {
+      try {
+        const models = await listOpenAiModels(openAiApiKey);
+        checks.openai = {
+          ok: true,
+          message: `Verified (${models.length} model(s) returned).`,
+        };
+      } catch (error: unknown) {
+        checks.openai = {
+          ok: false,
+          message: error instanceof Error ? error.message : "Unknown verification error.",
+        };
+      }
+    }
+
+    if (googleBooksApiKey) {
+      try {
+        await verifyGoogleBooksApiKey(googleBooksApiKey);
+        checks.googlebooks = {
+          ok: true,
+          message: "Verified.",
+        };
+      } catch (error: unknown) {
+        checks.googlebooks = {
+          ok: false,
+          message: error instanceof Error ? error.message : "Unknown verification error.",
+        };
+      }
+    }
+
+    const ok = checks.openai.ok && checks.googlebooks.ok;
+    return res.json({ ok, checks });
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.issues });

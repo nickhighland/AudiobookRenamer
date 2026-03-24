@@ -1,6 +1,6 @@
 {
   "name": "audiobook-namer-and-organizer",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "Cross-platform audiobook organizer with OpenAI-powered identification and metadata export",
   "private": true,
   "workspaces": [
